@@ -92,8 +92,8 @@ def export_xlsx(project: Project, results: Results, path: str | os.PathLike) -> 
     params += [["Run", f"{r.id}: {r.source_file or r.name} ({r.instrument})"] for r in project.runs]
     params += [["Reference gene", n] for n, t in project.targets.items() if t.kind == "reference"]
     params += [
-        ["Efficiency", f"{n}: {results.efficiencies.get(n, 1.0):.4f} ({t.efficiency_mode})"]
-        for n, t in project.targets.items()
+        ["Efficiency", f"{n}: {results.efficiencies.get(n, 1.0):.4f} ({results.efficiency_source.get(n, 'ideal')})"]
+        for n in project.targets
     ]
     params += [[f.name, getattr(s, f.name)] for f in dataclasses.fields(s)]
     params += [["Excluded", f"{run.id} {well.coord} {rxn.target}", rxn.exclude_reason]

@@ -81,3 +81,9 @@ def test_bh_across_targets():
     comps, _ = compare(_rqs(two, "IL6") + _rqs(other, "TNF"), "ctrl", "dunnett")
     ps = [c.p for c in comps]
     assert [c.p_adj for c in comps] == pytest.approx(bh_adjust(ps))
+
+
+def test_bh_ignores_nan():
+    out = bh_adjust([0.01, float("nan"), 0.04])
+    assert out[0] == pytest.approx(0.02) and out[2] == pytest.approx(0.04)
+    assert out[1] != out[1]  # NaN stays NaN

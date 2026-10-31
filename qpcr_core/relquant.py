@@ -26,17 +26,33 @@ class SampleRQ:
     log2_rq: float
 
 
-def efficiencies(project: Project, curves: dict[tuple[str | None, str], StdCurve]) -> dict[str, float]:
-    out: dict[str, float] = {}
+USABLE_EFFICIENCY = (0.5, 1.5)  # outside this a curve is broken (e.g. swapped quantities), not just poor
+
+
+def efficiencies_with_source(
+    project: Project, curves: dict[tuple[str | None, str], StdCurve]
+) -> tuple[dict[str, float], dict[str, str], list[Flag]]:
+    """Efficiency per target, where it came from (stdcurve | manual | ideal), and flags."""
+    eff: dict[str, float] = {}
+    source: dict[str, str] = {}
+    flags: list[Flag] = []
+    lo, hi = USABLE_EFFICIENCY
     for name, t in project.targets.items():
         own = [c.efficiency for (_run, target), c in curves.items() if target == name]
-        if t.efficiency_mode == "ideal":
-            out[name] = 1.0
-        elif t.efficiency_mode == "stdcurve" and own:
-            out[name] = fmean(own)
+        if t.efficiency_mode == "stdcurve" and own:
+            if lo <= fmean(own) <= hi:
+                eff[name], source[name] = fmean(own), "stdcurve"
+                continue
+            flags.append(Flag("warning", "efficiency_unusable", {"eff": fmean(own)}, target=name))
+        if t.efficiency_mode != "ideal" and t.efficiency_manual is not None:
+            eff[name], source[name] = t.efficiency_manual, "manual"
         else:
-            out[name] = t.efficiency_manual if t.efficiency_manual is not None else 1.0
-    return out
+            eff[name], source[name] = 1.0, "ideal"
+    return eff, source, flags
+
+
+def efficiencies(project: Project, curves: dict[tuple[str | None, str], StdCurve]) -> dict[str, float]:
+    return efficiencies_with_source(project, curves)[0]
 
 
 def _calibrator_cq(project: Project, mean_cq: dict[tuple[str, str], float | None], target: str) -> float | None:
@@ -64,9 +80,15 @@ def relative_quantities(
 
     flags: list[Flag] = []
     cal = {t: _calibrator_cq(project, mean_cq, t) for t in refs + targets}
-    for t in targets:
+    for t in refs + targets:
         if cal[t] is None:
             flags.append(Flag("error", "no_calibrator_cq", target=t))
+    usable_refs = [r for r in refs if cal[r] is not None]
+    ungrouped = {
+        s for s, _t in mean_cq if not (project.samples.get(s) and project.samples[s].group)
+    }
+    if ungrouped:
+        flags.append(Flag("warning", "samples_without_group", {"count": len(ungrouped)}))
 
     def amp(t: str) -> float:
         return 1.0 + eff.get(t, 1.0)
@@ -77,12 +99,14 @@ def relative_quantities(
             continue
         log_norm = [
             (cal[r] - cq) * math.log(amp(r))
-            for r in refs
-            if cal[r] is not None and (cq := mean_cq.get((name, r))) is not None
+            for r in usable_refs
+            if (cq := mean_cq.get((name, r))) is not None
         ]
         if not log_norm:
             flags.append(Flag("error", "no_reference_for_sample", sample=name))
             continue
+        if len(log_norm) < len(usable_refs):
+            flags.append(Flag("warning", "partial_reference", sample=name))
         norm = fmean(log_norm)  # log of the geometric mean
         for t in targets:
             if cal[t] is None:

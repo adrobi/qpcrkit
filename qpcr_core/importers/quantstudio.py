@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 from ..models import Reaction, Run, coord_from_index
-from .base import ImportReport, ReportBuilder, column_index, find_header, map_role, normalize_coord
+from .base import ImportReport, ReportBuilder, column_index, map_role, normalize_coord
 from .textio import parse_cq, parse_number
 
 _CQ_HEADERS = ("ct", "cq", "cт")
 
 
 def _header(rows: list[list[str]]) -> int | None:
-    h = find_header(rows, "Sample Name", "Target Name")
-    if h is not None and any(c.lower() in _CQ_HEADERS for c in rows[h]):
-        return h
+    # A [Sample Setup] table may precede [Results]: take the first one that has a Cq column.
+    for i, row in enumerate(rows):
+        cells = {c.lower() for c in row}
+        if {"sample name", "target name"} <= cells and cells & set(_CQ_HEADERS):
+            return i
     return None
 
 

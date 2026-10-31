@@ -34,14 +34,21 @@ def fit_std_curves(project: Project, cq_of: CqFn) -> tuple[dict[tuple[str | None
     s = project.settings
     # key -> quantity -> list of cq (None = no amplification)
     data: dict[tuple[str | None, str], dict[float, list[float | None]]] = defaultdict(lambda: defaultdict(list))
-    for run, _well, rxn in project.iter_reactions():
-        if rxn.role != "std" or rxn.excluded or not rxn.quantity or rxn.quantity <= 0:
+    no_quantity: dict[tuple[str, str], list[str]] = defaultdict(list)
+    for run, well, rxn in project.iter_reactions():
+        if rxn.role != "std" or rxn.excluded:
+            continue
+        if not rxn.quantity or rxn.quantity <= 0:
+            no_quantity[(run.id, rxn.target)].append(well.coord)
             continue
         key = (None if s.pool_std_runs else run.id, rxn.target)
         data[key][rxn.quantity].append(cq_of(run, rxn))
 
     curves: dict[tuple[str | None, str], StdCurve] = {}
-    flags: list[Flag] = []
+    flags = [
+        Flag("warning", "std_no_quantity", {}, run_id, tuple(coords), target)
+        for (run_id, target), coords in no_quantity.items()
+    ]
     for key, levels in data.items():
         run_id, target = key
         points = [(q, cq) for q, cqs in levels.items() for cq in cqs if cq is not None]

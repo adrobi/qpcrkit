@@ -49,9 +49,11 @@ class Comparison:
 
 
 def bh_adjust(pvalues: list[float]) -> list[float]:
-    m = len(pvalues)
-    order = sorted(range(m), key=lambda i: pvalues[i])
-    adjusted = [0.0] * m
+    # NaN p-values (e.g. zero-variance groups) stay NaN and do not count towards m.
+    valid = [i for i, p in enumerate(pvalues) if not math.isnan(p)]
+    m = len(valid)
+    order = sorted(valid, key=lambda i: pvalues[i])
+    adjusted = [math.nan] * len(pvalues)
     running = 1.0
     for rank in range(m, 0, -1):
         i = order[rank - 1]

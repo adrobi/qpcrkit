@@ -41,3 +41,19 @@ def test_cq_header_variants():
     for name in ("CT", "Ct", "Cq"):
         rows = [["Well", "Sample Name", "Target Name", "Task", name], ["A1", "s", "t", "UNKNOWN", "20.0"]]
         assert quantstudio.parse(rows, "x", "R1").run.wells["A1"].reactions[0].cq == 20.0
+
+
+def test_sample_setup_section_before_results():
+    rows = [
+        ["* Block Type = 96-Well Block (0.2mL)"],
+        ["[Sample Setup]"],
+        ["Well", "Well Position", "Sample Name", "Target Name", "Task", "Reporter"],
+        ["1", "A1", "s1", "IL6", "UNKNOWN", "SYBR"],
+        ["[Results]"],
+        ["Well", "Well Position", "Sample Name", "Target Name", "Task", "Reporter", "CT"],
+        ["1", "A1", "s1", "IL6", "UNKNOWN", "SYBR", "22.5"],
+    ]
+    assert quantstudio.sniff(rows)
+    run = quantstudio.parse(rows, "x", "R1").run
+    assert run.wells["A1"].reactions[0].cq == 22.5
+    assert len(run.wells["A1"].reactions) == 1

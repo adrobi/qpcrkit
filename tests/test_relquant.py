@@ -112,3 +112,45 @@ def test_efficiencies_modes():
     p.targets["IL6"].efficiency_mode = "stdcurve"
     curves = {("R1", "IL6"): _curve(0.90), ("R2", "IL6"): _curve(0.94)}
     assert efficiencies(p, curves)["IL6"] == pytest.approx(0.92)
+
+
+def _two_ref_project():
+    return _project(refs=("GAPDH", "REF2"), targets=("IL6", "GAPDH", "REF2"))
+
+
+def test_partial_reference_flagged():
+    mean = dict(MEAN)
+    mean.update({("c1", "REF2"): 20.0, ("c2", "REF2"): 20.0, ("s1", "REF2"): None})
+    rqs, flags = relative_quantities(_two_ref_project(), mean, {"IL6": 1.0, "GAPDH": 1.0, "REF2": 1.0})
+    assert [(f.severity, f.code, f.sample) for f in flags] == [("warning", "partial_reference", "s1")]
+    assert _rq(rqs, "s1").rq == pytest.approx(4.0)
+
+
+def test_reference_without_calibrator_cq():
+    mean = dict(MEAN)
+    mean.update({("c1", "REF2"): None, ("c2", "REF2"): None, ("s1", "REF2"): 21.0})
+    _, flags = relative_quantities(_two_ref_project(), mean, {"IL6": 1.0, "GAPDH": 1.0, "REF2": 1.0})
+    assert [(f.severity, f.code, f.target) for f in flags] == [("error", "no_calibrator_cq", "REF2")]
+
+
+def test_samples_without_group():
+    p = _project()
+    p.samples["x"] = Sample("x")
+    mean = dict(MEAN)
+    mean.update({("x", "IL6"): 22.0, ("x", "GAPDH"): 20.0})
+    _, flags = relative_quantities(p, mean, {"IL6": 1.0, "GAPDH": 1.0})
+    assert [(f.severity, f.code, f.params) for f in flags] == [("warning", "samples_without_group", {"count": 1})]
+
+
+def test_efficiency_sources_and_unusable_curve():
+    from qpcr_core.relquant import efficiencies_with_source
+
+    p = _project()
+    p.targets["GAPDH"].efficiency_mode = "manual"
+    p.targets["GAPDH"].efficiency_manual = 0.97
+    eff, source, flags = efficiencies_with_source(p, {(None, "IL6"): _curve(-1.0)})
+    assert eff == {"IL6": 1.0, "GAPDH": 0.97}
+    assert source == {"IL6": "ideal", "GAPDH": "manual"}
+    assert [(f.code, f.target) for f in flags] == [("efficiency_unusable", "IL6")]
+    eff, source, flags = efficiencies_with_source(p, {(None, "IL6"): _curve(0.93)})
+    assert (eff["IL6"], source["IL6"], flags) == (0.93, "stdcurve", [])

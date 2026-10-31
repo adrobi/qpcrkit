@@ -58,3 +58,28 @@ def test_corrected_cq():
     cf, _ = calibration_factors(make_project(BASE))
     assert corrected_cq(cf, "R2", "GAPDH", 25.0) == pytest.approx(24.5)
     assert corrected_cq(cf, "R9", "X", 25.0) == 25.0
+
+
+def test_mixed_irc_targets_use_common_keys():
+    # Review finding #1: R1 has only GAPDH IRC, R2 has GAPDH and IL6 IRC.
+    p = make_project([
+        ("R1", "A1", "irc", "GAPDH", "irc", 20.0, None),
+        ("R1", "B1", "s1", "IL6", "unknown", 25.0, None),
+        ("R2", "A1", "irc", "GAPDH", "irc", 20.4, None),
+        ("R2", "A2", "irc", "IL6", "irc", 25.4, None),
+        ("R2", "B1", "s2", "IL6", "unknown", 26.0, None),
+    ])
+    cf, flags = calibration_factors(p)
+    assert cf[("R1", "IL6")] == pytest.approx(-0.2)
+    assert cf[("R2", "IL6")] == pytest.approx(0.2)
+    assert [(f.code, f.severity, f.target) for f in flags] == [("irc_partial", "warning", "IL6")]
+
+
+def test_no_common_irc():
+    p = make_project([
+        ("R1", "A1", "irc", "GAPDH", "irc", 20.0, None),
+        ("R2", "A1", "irc", "IL6", "irc", 25.4, None),
+    ])
+    cf, flags = calibration_factors(p)
+    assert cf == {}
+    assert ("irc_no_common", "warning") in [(f.code, f.severity) for f in flags]

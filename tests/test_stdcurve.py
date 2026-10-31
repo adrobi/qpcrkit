@@ -85,3 +85,9 @@ def test_per_run_curves():
     p = make_project(_ideal_rows("R1") + _ideal_rows("R2"), pool_std_runs=False)
     curves, _ = fit_std_curves(p, raw_cq)
     assert set(curves) == {("R1", "IL6"), ("R2", "IL6")}
+
+
+def test_standard_without_quantity_flagged():
+    rows = _ideal_rows() + [("R1", "C2", None, "IL6", "std", 30.0, None)]
+    _, flags = fit_std_curves(make_project(rows), raw_cq)
+    assert [(f.code, f.severity, f.target, f.coords) for f in flags] == [("std_no_quantity", "warning", "IL6", ("C2",))]

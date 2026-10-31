@@ -52,3 +52,12 @@ def test_html(data, tmp_path):
     assert "<svg" in text
     assert 'src="http' not in text
     assert "IL6" in text
+
+
+def test_efficiency_source_reported(data, tmp_path):
+    p, res = data
+    path = tmp_path / "e.xlsx"
+    export_xlsx(p, res, path)
+    cells = [str(c.value) for row in openpyxl.load_workbook(path)[tr("sheet.params")].iter_rows() for c in row]
+    assert "GAPDH: 1.0000 (ideal)" in cells
+    assert any(c.startswith("IL6: ") and c.endswith("(stdcurve)") for c in cells)
