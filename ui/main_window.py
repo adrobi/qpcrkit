@@ -116,6 +116,7 @@ class MainWindow(QMainWindow):
         self.sample_edit = QLineEdit(placeholderText=tr("ui.col.sample"))
         self.group_edit = QLineEdit(placeholderText=tr("ui.col.group"))
         self.role_combo = QComboBox()
+        self.role_combo.addItem(tr("ui.none"), None)  # leave roles unchanged
         for role in ROLES:
             self.role_combo.addItem(tr(f"ui.role.{role}"), role)
         self.quantity_edit = QLineEdit(placeholderText=tr("ui.col.quantity"))
@@ -269,7 +270,8 @@ class MainWindow(QMainWindow):
         def edit(p: Project) -> None:
             if sample:
                 assign_sample(p, run_id, coords, sample)
-            set_role(p, run_id, coords, role)
+            if role:
+                set_role(p, run_id, coords, role)
             if quantity is not None:
                 set_quantity(p, run_id, coords, quantity)
             if group:

@@ -152,3 +152,13 @@ def test_qc_locate(demo):
     demo.qc.locate.emit("R2", "B1")
     assert demo.tabs.currentIndex() == 0
     assert demo.current_run_id == "R2" and demo.plate.selected_coords() == ["B1"]
+
+
+def test_apply_bar_keeps_role_when_not_chosen(demo):
+    demo.select_run("R1")
+    std = next(c for c, w in demo.editor.project.run("R1").wells.items() if w.reactions[0].role == "std")
+    demo.plate.select_coords([std])
+    demo.sample_edit.setText("S-std")
+    demo._apply_bar()
+    w = demo.editor.project.run("R1").wells[std]
+    assert w.sample == "S-std" and w.reactions[0].role == "std"
