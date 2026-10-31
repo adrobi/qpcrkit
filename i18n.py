@@ -83,16 +83,6 @@ def detect_system_language() -> str:
     except Exception:
         pass
 
-    # 4. Check Qt QLocale if available
-    try:
-        from PySide6.QtCore import QLocale
-
-        sys_loc = QLocale.system().name().lower()
-        if sys_loc.startswith("ru"):
-            return "ru"
-    except Exception:
-        pass
-
     return "en"
 
 

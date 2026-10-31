@@ -16,3 +16,12 @@ class Flag:
     coords: tuple[str, ...] = ()
     target: str | None = None
     sample: str | None = None
+
+
+def flag_text(flag: Flag) -> str:
+    from i18n import tr
+
+    try:
+        return tr(f"qc.{flag.code}", **flag.params)
+    except (KeyError, ValueError, IndexError):
+        return flag.code
