@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import math
+import warnings
 from collections import defaultdict
 from dataclasses import dataclass
 from statistics import fmean, stdev
@@ -84,6 +85,13 @@ def _dunnett(others: list[list[float]], control: list[float]):
 
 
 def compare(rqs: list[SampleRQ], control_group: str, test: str) -> tuple[list[Comparison], list[Flag]]:
+    # Identical replicate values (zero variance) make scipy warn and return NaN p; NaN is the answer.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        return _compare(rqs, control_group, test)
+
+
+def _compare(rqs: list[SampleRQ], control_group: str, test: str) -> tuple[list[Comparison], list[Flag]]:
     comps: list[Comparison] = []
     flags: list[Flag] = []
     for target, groups in _by_target_group(rqs).items():
