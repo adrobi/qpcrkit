@@ -71,3 +71,24 @@ EN.update(
         "ui.pooled": "all runs",
     }
 )
+
+EN.update(
+    {
+        "ui.runs": "Runs", "ui.targets": "Targets", "ui.groups": "Groups",
+        "ui.add_run": "Add run…", "ui.import_layout": "Import layout…",
+        "ui.wells_n": "{n} wells",
+        "ui.references": "Reference genes", "ui.control_group": "Control group",
+        "ui.efficiency": "Efficiency", "ui.eff.stdcurve": "from curve", "ui.eff.manual": "manual", "ui.eff.ideal": "100 %",
+        "ui.test": "Post-hoc test", "ui.test.dunnett": "Dunnett (vs control)", "ui.test.tukey": "Tukey (all pairs)",
+        "ui.thresholds": "QC thresholds",
+        "ui.set.rep_sd_max": "Replicate SD, max", "ui.set.ntc_cq_min": "NTC Cq, min", "ui.set.late_cq": "Late Cq",
+        "ui.set.eff_min": "Efficiency, min", "ui.set.eff_max": "Efficiency, max", "ui.set.r2_min": "R², min",
+        "ui.pool_std_runs": "Pool standards across runs",
+        "ui.none": "—",
+        "ui.wizard.title": "Import table", "ui.wizard.header_row": "Header row",
+        "ui.wizard.preset": "Preset", "ui.wizard.save_preset": "Save as preset:",
+        "ui.wizard.required": "Choose the well, target and Cq columns",
+        "ui.field.well": "Well", "ui.field.target": "Target", "ui.field.cq": "Cq", "ui.field.sample": "Sample",
+        "ui.field.role": "Role", "ui.field.quantity": "Quantity", "ui.field.group": "Group",
+    }
+)

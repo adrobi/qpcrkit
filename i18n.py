@@ -154,3 +154,24 @@ RU.update(
         "ui.pooled": "все запуски",
     }
 )
+
+RU.update(
+    {
+        "ui.runs": "Запуски", "ui.targets": "Мишени", "ui.groups": "Группы",
+        "ui.add_run": "Добавить запуск…", "ui.import_layout": "Импорт разметки…",
+        "ui.wells_n": "{n} лунок",
+        "ui.references": "Референсные гены", "ui.control_group": "Контрольная группа",
+        "ui.efficiency": "Эффективность", "ui.eff.stdcurve": "по кривой", "ui.eff.manual": "вручную", "ui.eff.ideal": "100 %",
+        "ui.test": "Пост-хок тест", "ui.test.dunnett": "Даннет (против контроля)", "ui.test.tukey": "Тьюки (все пары)",
+        "ui.thresholds": "Пороги QC",
+        "ui.set.rep_sd_max": "SD реплик, макс.", "ui.set.ntc_cq_min": "Cq NTC, мин.", "ui.set.late_cq": "Поздний Cq",
+        "ui.set.eff_min": "Эффективность, мин.", "ui.set.eff_max": "Эффективность, макс.", "ui.set.r2_min": "R², мин.",
+        "ui.pool_std_runs": "Объединять стандарты всех запусков",
+        "ui.none": "—",
+        "ui.wizard.title": "Импорт таблицы", "ui.wizard.header_row": "Строка заголовка",
+        "ui.wizard.preset": "Пресет", "ui.wizard.save_preset": "Сохранить как пресет:",
+        "ui.wizard.required": "Укажите колонки лунки, мишени и Cq",
+        "ui.field.well": "Лунка", "ui.field.target": "Мишень", "ui.field.cq": "Cq", "ui.field.sample": "Образец",
+        "ui.field.role": "Роль", "ui.field.quantity": "Количество", "ui.field.group": "Группа",
+    }
+)
