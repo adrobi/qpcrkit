@@ -28,3 +28,12 @@ EN: dict[str, str] = {
     "sheet.stats": "Statistics",
     "sheet.params": "Analysis parameters",
 }
+
+EN.update(
+    {
+        "cli.unknown_format": "Unrecognized file format: {path}. Open it in qpcrkit with the CSV import wizard.",
+        "cli.inspect": "Format: {fmt}\nWells: {wells}\nReactions: {reactions}\nTargets: {targets}\nSamples: {samples}\nSkipped rows: {skipped}",
+        "cli.summary": "Errors: {error}, warnings: {warning}, info: {info}",
+        "cli.saved": "Saved: {path}",
+    }
+)

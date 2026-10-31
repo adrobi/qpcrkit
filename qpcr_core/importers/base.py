@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..models import Reaction, Run, Sample, Well, parse_coord, format_coord
+from ..models import Project, Reaction, Run, Sample, Well, format_coord, parse_coord
 
 
 @dataclass
@@ -79,3 +79,13 @@ class ReportBuilder:
                 s.group = group
         well.reactions.append(reaction)
         self.report.imported += 1
+
+
+def add_report(project: Project, report: ImportReport) -> None:
+    """Append an imported run to the project, merging sample groups and creating targets."""
+    project.runs.append(report.run)
+    for name, s in report.samples.items():
+        existing = project.samples.setdefault(name, Sample(name))
+        if s.group and not existing.group:
+            existing.group = s.group
+    project.ensure_targets_and_samples()

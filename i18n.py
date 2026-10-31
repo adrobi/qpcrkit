@@ -111,3 +111,12 @@ def tr(key: str, **kwargs) -> str:
 
 def current_language() -> str:
     return _lang
+
+RU.update(
+    {
+        "cli.unknown_format": "Формат файла не распознан: {path}. Откройте его в qpcrkit через мастер импорта CSV.",
+        "cli.inspect": "Формат: {fmt}\nЛунок: {wells}\nРеакций: {reactions}\nМишеней: {targets}\nОбразцов: {samples}\nПропущено строк: {skipped}",
+        "cli.summary": "Ошибок: {error}, предупреждений: {warning}, информационных: {info}",
+        "cli.saved": "Сохранено: {path}",
+    }
+)
