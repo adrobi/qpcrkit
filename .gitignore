@@ -21,3 +21,7 @@ Thumbs.db
 *.env
 .superpowers/
 smoke/
+
+# Local working notes, not published
+concept.ru.md
+docs/superpowers/
