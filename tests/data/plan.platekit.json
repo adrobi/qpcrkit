@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "plate": {
+    "name": "Plate_01",
+    "format_id": "96",
+    "wells": [
+      {"row": 0, "col": 0, "coord": "A1", "sample": "c1", "concentration": null, "assay": "", "role": "unknown", "replicate_group": "Ctrl", "std_quantity": null, "note": ""},
+      {"row": 0, "col": 1, "coord": "A2", "sample": "std-a", "concentration": null, "assay": "IL6", "role": "std", "replicate_group": "", "std_quantity": 1000.0, "note": ""},
+      {"row": 0, "col": 2, "coord": "A3", "sample": "", "concentration": null, "assay": "", "role": "ipc", "replicate_group": "", "std_quantity": null, "note": ""},
+      {"row": 0, "col": 3, "coord": "A4", "sample": "", "concentration": null, "assay": "", "role": "empty", "replicate_group": "", "std_quantity": null, "note": ""},
+      {"row": 7, "col": 11, "coord": "H12", "sample": "ghost", "concentration": null, "assay": "", "role": "unknown", "replicate_group": "X", "std_quantity": null, "note": ""}
+    ]
+  },
+  "recipe": {},
+  "norm_config": {}
+}
