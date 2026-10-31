@@ -1,0 +1,6 @@
+* Block Type = 384-Well Block
+
+[Results]
+Well	Sample Name	Target Name	Task	Reporter	Quencher	Ct
+25	S1	IL6	UNKNOWN	FAM	NFQ-MGB	24.5
+26	S1	IL6	UNKNOWN	FAM	NFQ-MGB	24.6

@@ -1,0 +1,9 @@
+* Block Type = 96-Well Block (0.2mL)
+* Experiment Name = demo
+
+[Results]
+Well	Well Position	Omit	Sample Name	Target Name	Task	Reporter	Quencher	CT	Ct Mean	Ct SD	Quantity	Biogroup Name
+1	A1	false	Ctrl1	GAPDH	UNKNOWN	SYBR	None	20.10	20.1	0.0		Ctrl
+2	A2	true	Ctrl1	GAPDH	UNKNOWN	SYBR	None	23.90	20.1	0.0		Ctrl
+3	A3	false		GAPDH	NTC	SYBR	None	Undetermined				
+13	B1	false	Std1	IL6	STANDARD	SYBR	None	18,40			1000	
