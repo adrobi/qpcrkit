@@ -55,3 +55,19 @@ EN.update(
         "ui.role.pos": "positive control",
     }
 )
+
+EN.update(
+    {
+        "ui.no_curves": "No standard curves: mark standard wells and set their quantities",
+        "ui.no_groups": "No expression data: choose reference genes, a control group and sample groups",
+        "ui.no_flags": "No issues",
+        "ui.target": "Target", "ui.curve": "Curve", "ui.error_bar": "Error bars", "ui.log2": "log2",
+        "ui.error.sd": "SD", "ui.error.sem": "SEM", "ui.error.ci95": "95% CI",
+        "ui.col.slope": "Slope", "ui.col.intercept": "Intercept", "ui.col.r2": "R²", "ui.col.efficiency": "Efficiency",
+        "ui.col.lowest": "Lowest detected standard", "ui.col.n": "n", "ui.col.fold": "Fold change",
+        "ui.col.group_b": "Versus", "ui.col.test": "Test", "ui.col.p": "p", "ui.col.p_adj": "p (BH)",
+        "ui.col.severity": "Level", "ui.col.where": "Where", "ui.col.message": "Message",
+        "ui.severity.error": "error", "ui.severity.warning": "warning", "ui.severity.info": "info",
+        "ui.pooled": "all runs",
+    }
+)

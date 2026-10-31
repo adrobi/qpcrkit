@@ -138,3 +138,19 @@ RU.update(
         "ui.role.pos": "полож. контроль",
     }
 )
+
+RU.update(
+    {
+        "ui.no_curves": "Нет стандартных кривых: отметьте лунки стандартов и задайте количества",
+        "ui.no_groups": "Нет данных для экспрессии: выберите референсные гены, контрольную группу и задайте группы образцов",
+        "ui.no_flags": "Замечаний нет",
+        "ui.target": "Мишень", "ui.curve": "Кривая", "ui.error_bar": "Погрешность", "ui.log2": "log2",
+        "ui.error.sd": "SD", "ui.error.sem": "SEM", "ui.error.ci95": "95 % ДИ",
+        "ui.col.slope": "Наклон", "ui.col.intercept": "Пересечение", "ui.col.r2": "R²", "ui.col.efficiency": "Эффективность",
+        "ui.col.lowest": "Наименьший детектируемый стандарт", "ui.col.n": "n", "ui.col.fold": "Кратность",
+        "ui.col.group_b": "Против", "ui.col.test": "Тест", "ui.col.p": "p", "ui.col.p_adj": "p (BH)",
+        "ui.col.severity": "Уровень", "ui.col.where": "Где", "ui.col.message": "Сообщение",
+        "ui.severity.error": "ошибка", "ui.severity.warning": "предупреждение", "ui.severity.info": "инфо",
+        "ui.pooled": "все запуски",
+    }
+)
