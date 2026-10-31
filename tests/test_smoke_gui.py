@@ -162,3 +162,42 @@ def test_apply_bar_keeps_role_when_not_chosen(demo):
     demo._apply_bar()
     w = demo.editor.project.run("R1").wells[std]
     assert w.sample == "S-std" and w.reactions[0].role == "std"
+
+
+def test_export_uses_pending_edits(demo, tmp_path):
+    import openpyxl
+
+    demo.select_run("R1")
+    before = demo.results.mean_cq[("Ctrl-1", "GAPDH")]
+    demo.plate.exclude_toggled.emit("A1")  # recalculation still pending (300 ms timer)
+    assert demo.export("xlsx", tmp_path / "r.xlsx")
+    assert demo.results.mean_cq[("Ctrl-1", "GAPDH")] != before
+    ws = openpyxl.load_workbook(tmp_path / "r.xlsx")[openpyxl.load_workbook(tmp_path / "r.xlsx").sheetnames[4]]
+    ctrl1 = next(r for r in ws.iter_rows(values_only=True) if r[0] == "Ctrl-1")
+    assert ctrl1[3] == pytest.approx(demo.results.mean_cq[("Ctrl-1", "IL6")])
+
+
+def test_language_switch_does_not_leak_listeners(demo):
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    from qpcr_core.editing import set_group
+
+    def receivers():
+        return demo.editor.receivers("2changed()")
+
+    demo.set_language("en")
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    base = receivers()
+    for lang in ("ru", "en", "ru"):
+        demo.set_language(lang)
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert receivers() == base
+    demo.editor.apply(set_group, "Ctrl-1", "Ctrl")  # must not touch deleted widgets
+
+
+def test_import_summary_survives_recalculation(win, tmp_path):
+    f = tmp_path / "cfx.csv"
+    f.write_text(RUN1.read_text(encoding="utf-8") + "99,,SYBR,IL6,Unkn,,X,,20,,,\n", encoding="utf-8")
+    assert win.add_run(f)
+    win.recalculate_now()
+    assert "1" in win.statusBar().currentMessage() and win.last_import_note in win.statusBar().currentMessage()

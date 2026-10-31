@@ -63,6 +63,7 @@ class MainWindow(QMainWindow):
         self.editor = ProjectEditor()
         self.results: Results | None = None
         self.current_run_id: str | None = None
+        self.last_import_note = ""
         self._timer = QTimer(self, singleShot=True, interval=RECALC_DELAY_MS)
         self._timer.timeout.connect(self.recalculate_now)
         self.editor.changed.connect(self._on_project_changed)
@@ -220,12 +221,13 @@ class MainWindow(QMainWindow):
         if not project.runs:
             self.statusBar().showMessage(tr("ui.no_run"))
         else:
-            self.statusBar().showMessage(tr(
+            status = tr(
                 "ui.status",
                 runs=len(project.runs),
                 errors=len(results.flags_by_severity("error")),
                 warnings=len(results.flags_by_severity("warning")),
-            ))
+            )
+            self.statusBar().showMessage(" · ".join(x for x in (status, self.last_import_note) if x))
 
     def select_run(self, run_id: str) -> None:
         self.current_run_id = run_id
@@ -318,6 +320,7 @@ class MainWindow(QMainWindow):
         except SessionError as exc:
             self._show_error(str(exc))
             return False
+        self.last_import_note = ""
         self.editor.set_project(project, Path(path))
         self._remember(path)
         self.recalculate_now()
@@ -352,9 +355,10 @@ class MainWindow(QMainWindow):
             return False
         self.current_run_id = run_id
         self.editor.apply(add_report, report)
-        self.statusBar().showMessage(
-            tr("ui.imported", imported=report.imported, total=report.total_rows, skipped=len(report.skipped)), 8000
+        self.last_import_note = tr(
+            "ui.imported", imported=report.imported, total=report.total_rows, skipped=len(report.skipped)
         )
+        self.statusBar().showMessage(self.last_import_note)
         return True
 
     def import_layout(self, path: str | Path, run_id: str | None = None) -> int:
@@ -368,7 +372,7 @@ class MainWindow(QMainWindow):
         return int(self.editor.apply(_apply_layout_to_runs, layout, run_ids))
 
     def export(self, kind: str, path: str | Path) -> bool:
-        if self.results is None:
+        if self.results is None or self._timer.isActive():  # never export before pending edits are analyzed
             self.recalculate_now()
         project, results = self.editor.project, self.results
         if results is None:

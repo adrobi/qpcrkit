@@ -16,3 +16,9 @@ All notable changes to this project are documented here. The format follows
   Dunnett, Tukey, Benjamini–Hochberg).
 - Figures (SVG/PDF/PNG), xlsx/CSV/HTML export, sessions `*.qpcrkit.json`.
 - CLI `qpcrkit inspect | new | analyze` and demo data in `examples/`.
+- Desktop application (`qpcrkit` / `qpcrkit gui`): project tree, plate view with
+  selection and exclusion, editable data table with paste from Excel, standard
+  curves, relative expression with statistics, QC list that jumps to the well,
+  analysis settings, CSV import wizard with presets, undo/redo, automatic
+  recalculation, light/dark theme, Russian/English, error dialog with a copyable
+  report.

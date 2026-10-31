@@ -34,13 +34,24 @@ from qpcr_core.editing import (
     set_role,
 )
 from qpcr_core.importers.textio import parse_number
-from qpcr_core.models import ROLES
+from qpcr_core.models import ROLES, parse_coord
 from ui.editor import ProjectEditor
 
 COLUMNS = ("run", "well", "sample", "group", "target", "role", "cq", "quantity", "excluded")
 _COL = {name: index for index, name in enumerate(COLUMNS)}
 SORT_ROLE = Qt.ItemDataRole.UserRole
 _FILTER_COLUMNS = (_COL["run"], _COL["well"], _COL["sample"], _COL["target"])
+
+
+def _well_key(coord: str) -> int:
+    """Row-major numeric order (A1, A2, …, A10, B1); Qt cannot sort Python tuples."""
+    if coord.isdigit():
+        return int(coord)
+    try:
+        row, col = parse_coord(coord)
+    except ValueError:
+        return 10**6
+    return 1000 + row * 100 + col
 
 
 class _FilterProxy(QSortFilterProxyModel):
@@ -93,8 +104,8 @@ class RoleDelegate(QStyledItemDelegate):
 
 
 class ReactionModel(QAbstractTableModel):
-    def __init__(self, editor: ProjectEditor) -> None:
-        super().__init__()
+    def __init__(self, editor: ProjectEditor, parent: QObject | None = None) -> None:
+        super().__init__(parent)
         self.editor = editor
         self._rows: list[tuple[str, str, int]] = []
         self._edits = {
@@ -161,6 +172,8 @@ class ReactionModel(QAbstractTableModel):
         column = COLUMNS[index.column()]
         if role == Qt.ItemDataRole.CheckStateRole and column == "excluded":
             return Qt.CheckState.Checked if reaction.excluded else Qt.CheckState.Unchecked
+        if role == SORT_ROLE and column == "well":
+            return _well_key(well.coord)
         if role == SORT_ROLE and column in ("cq", "quantity"):
             value = getattr(reaction, column)
             return float("inf") if value is None else value
@@ -282,7 +295,7 @@ class DataTable(QWidget):
     def __init__(self, editor: ProjectEditor) -> None:
         super().__init__()
         self.editor = editor
-        self.model = ReactionModel(editor)
+        self.model = ReactionModel(editor, self)
         self.proxy = _FilterProxy(self)
         self.proxy.setSourceModel(self.model)
         self.proxy.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)

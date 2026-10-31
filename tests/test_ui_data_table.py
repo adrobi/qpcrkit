@@ -82,3 +82,11 @@ def test_cq_sorts_numerically(qapp):
     t.table.sortByColumn(COLUMNS.index("cq"), Qt.SortOrder.AscendingOrder)
     col = COLUMNS.index("cq")
     assert [t.proxy.index(r, col).data() for r in range(3)] == ["9.50", "20.00", "—"]
+
+
+def test_wells_sort_naturally(qapp):
+    e = ProjectEditor(make_project([("R1", c, "s", "IL6", "unknown", 20.0, None) for c in ("A10", "A2", "B1", "A1")]))
+    t = DataTable(e)
+    t.table.sortByColumn(COLUMNS.index("well"), Qt.SortOrder.AscendingOrder)
+    col = COLUMNS.index("well")
+    assert [t.proxy.index(r, col).data() for r in range(4)] == ["A1", "A2", "A10", "B1"]

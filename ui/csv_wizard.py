@@ -27,7 +27,7 @@ REQUIRED = ("well", "target", "cq")
 ALIASES: dict[str, set[str]] = {
     "well": {"well", "well position", "position", "лунка"},
     "target": {"target", "target name", "assay", "мишень"},
-    "cq": {"cq", "cт", "c(t)"},
+    "cq": {"cq", "ct", "cт", "c(t)"},
     "sample": {"sample", "sample name", "образец"},
     "role": {"role", "content", "task", "type", "роль"},
     "quantity": {

@@ -27,7 +27,8 @@ def install_excepthook(parent_getter: Callable[[], object]) -> None:
 
     def hook(exc_type, exc, tb) -> None:
         report = format_report((exc_type, exc, tb))
-        sys.__stderr__.write(report)
+        if sys.__stderr__ is not None:  # None in windowed (PyInstaller, pythonw) builds
+            sys.__stderr__.write(report)
         box = QMessageBox(QMessageBox.Icon.Critical, "qpcrkit", tr("ui.crash_text", error=exc), parent=parent_getter())
         box.setDetailedText(report)
         copy = box.addButton(tr("ui.copy_report"), QMessageBox.ButtonRole.ActionRole)

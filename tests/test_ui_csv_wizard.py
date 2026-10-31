@@ -25,7 +25,7 @@ def test_reject_gives_none(qapp):
 
 
 def test_missing_required_gives_none(qapp):
-    w = CsvWizard(ROWS, {})
+    w = CsvWizard([["Pos", "Gene", "Value"], ["A1", "IL6", "20"]], {})
     w.accept()
     assert w.mapping() is None
 
@@ -43,7 +43,13 @@ def test_preset_applied_and_saved(qapp):
 def test_invalid_accept_keeps_dialog_open(qapp):
     from PySide6.QtWidgets import QDialog
 
-    w = CsvWizard(ROWS, {})
+    w = CsvWizard([["Pos", "Gene", "Value"], ["A1", "IL6", "20"]], {})
     w.show()
     w.accept()
     assert w.isVisible() and w.result() != QDialog.DialogCode.Accepted
+
+
+def test_ct_header_guessed(qapp):
+    w = CsvWizard([["Well", "Target", "Ct"], ["A1", "IL6", "20"]], {})
+    w.accept()
+    assert w.mapping() == ColumnMapping(well="Well", target="Target", cq="Ct")
