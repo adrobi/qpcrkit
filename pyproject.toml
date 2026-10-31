@@ -27,7 +27,7 @@ qpcrkit = "qpcr_cli:main"
 py-modules = ["qpcr_cli", "i18n", "translations_en"]
 
 [tool.setuptools.packages.find]
-include = ["qpcr_core*"]
+include = ["qpcr_core*", "ui*"]
 
 [tool.setuptools.dynamic]
 version = { attr = "qpcr_core.__version__" }
