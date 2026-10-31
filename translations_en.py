@@ -115,6 +115,8 @@ EN.update(
         "ui.filter_layout": "Plate layout (*.platekit.json *.csv *.txt)",
         "ui.export_failed": "Could not save the file: {error}",
         "ui.import_failed": "Could not read the file: {error}",
+        "ui.crash_text": "Unexpected error: {error}\nYou can save the project and keep working. Please send the report to the developer.",
+        "ui.copy_report": "Copy report",
         "ui.no_run": "No runs yet: add an instrument export (File → Add run)",
     }
 )

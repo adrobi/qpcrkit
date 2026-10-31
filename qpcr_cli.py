@@ -115,9 +115,19 @@ def _analyze(args: argparse.Namespace) -> int:
     return 1 if args.strict and counts["error"] else 0
 
 
+def _gui(args: argparse.Namespace) -> int:
+    from ui.main_window import run
+
+    return run(Path(args.project) if args.project else None)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="qpcrkit", description="qPCR analysis (headless)")
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command")
+
+    p = sub.add_parser("gui", help="open the desktop application (default without a command)")
+    p.add_argument("project", nargs="?")
+    p.set_defaults(func=_gui)
 
     p = sub.add_parser("inspect", help="detect the format of an instrument export and summarize it")
     p.add_argument("file")
@@ -141,6 +151,9 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=_analyze)
 
     args = parser.parse_args(argv)
+    if args.command is None:
+        args.project = None
+        return _gui(args)
     return args.func(args)
 
 

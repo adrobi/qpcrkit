@@ -68,3 +68,12 @@ def test_no_qt_imported():
     code = f"import sys, qpcr_cli; qpcr_cli.main(['inspect', r'{RUN1}']); print('PySide6' in sys.modules)"
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True, cwd=ROOT)
     assert out.stdout.strip().splitlines()[-1] == "False"
+
+
+def test_gui_launch(monkeypatch):
+    calls = []
+    monkeypatch.setattr("ui.main_window.run", lambda project=None: calls.append(project) or 0)
+    assert main([]) == 0
+    assert main(["gui"]) == 0
+    assert main(["gui", "x.qpcrkit.json"]) == 0
+    assert calls == [None, None, Path("x.qpcrkit.json")]
