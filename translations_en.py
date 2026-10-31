@@ -43,3 +43,15 @@ EN.update(
         "cli.saved": "Saved: {path}",
     }
 )
+
+EN.update(
+    {
+        "ui.col.run": "Run", "ui.col.well": "Well", "ui.col.sample": "Sample", "ui.col.group": "Group",
+        "ui.col.target": "Target", "ui.col.role": "Role", "ui.col.cq": "Cq", "ui.col.quantity": "Quantity",
+        "ui.col.excluded": "Excluded",
+        "ui.filter": "Filter…",
+        "ui.paste_hint": "Ctrl+V: paste sample — group — biological replicate columns from Excel",
+        "ui.role.unknown": "sample", "ui.role.ntc": "NTC", "ui.role.std": "standard", "ui.role.irc": "calibrator (IRC)",
+        "ui.role.pos": "positive control",
+    }
+)

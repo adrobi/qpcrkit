@@ -126,3 +126,15 @@ RU.update(
         "cli.saved": "Сохранено: {path}",
     }
 )
+
+RU.update(
+    {
+        "ui.col.run": "Запуск", "ui.col.well": "Лунка", "ui.col.sample": "Образец", "ui.col.group": "Группа",
+        "ui.col.target": "Мишень", "ui.col.role": "Роль", "ui.col.cq": "Cq", "ui.col.quantity": "Количество",
+        "ui.col.excluded": "Исключена",
+        "ui.filter": "Фильтр…",
+        "ui.paste_hint": "Ctrl+V: вставить из Excel столбцы «образец — группа — биол. реплика»",
+        "ui.role.unknown": "образец", "ui.role.ntc": "NTC", "ui.role.std": "стандарт", "ui.role.irc": "калибратор (IRC)",
+        "ui.role.pos": "полож. контроль",
+    }
+)
