@@ -175,3 +175,29 @@ RU.update(
         "ui.field.role": "Роль", "ui.field.quantity": "Количество", "ui.field.group": "Группа",
     }
 )
+
+RU.update(
+    {
+        "menu.file": "Файл", "menu.edit": "Правка", "menu.view": "Вид", "menu.help": "Справка",
+        "act.new": "Новый проект", "act.open": "Открыть…", "act.recent": "Последние", "act.save": "Сохранить",
+        "act.save_as": "Сохранить как…", "act.add_run": "Добавить запуск…", "act.import_layout": "Импорт разметки…",
+        "act.export_xlsx": "Экспорт в Excel…", "act.export_csv": "Экспорт в CSV…", "act.export_html": "HTML-отчёт…",
+        "act.export_figures": "Рисунки (SVG)…", "act.exit": "Выход", "act.undo": "Отменить", "act.redo": "Повторить",
+        "act.dark": "Тёмная тема", "act.lang_ru": "Русский", "act.lang_en": "English", "act.about": "О программе",
+        "tab.plate": "Планшет", "tab.data": "Данные", "tab.std": "Стандарты", "tab.expr": "Экспрессия", "tab.qc": "QC",
+        "ui.untitled": "без имени",
+        "ui.analysis_failed": "Расчёт не выполнен: {error}",
+        "ui.status": "Запусков: {runs} · ошибок: {errors} · предупреждений: {warnings}",
+        "ui.unsaved_title": "Несохранённые изменения", "ui.unsaved_text": "Сохранить изменения в проекте?",
+        "ui.color_by": "Цвет:", "ui.color.target": "по мишени", "ui.color.role": "по роли",
+        "ui.selection": "Выделено: {n}", "ui.apply": "Применить", "ui.exclude": "Исключить", "ui.include": "Вернуть",
+        "ui.imported": "Импортировано {imported} из {total}; пропущено {skipped}",
+        "ui.about_text": "qpcrkit {version}\nАнализ данных qPCR. Лицензия MIT.",
+        "ui.filter_project": "Проект qpcrkit (*.qpcrkit.json)",
+        "ui.filter_tables": "Экспорт прибора (*.csv *.txt *.xlsx)",
+        "ui.filter_layout": "Разметка (*.platekit.json *.csv *.txt)",
+        "ui.export_failed": "Не удалось сохранить файл: {error}",
+        "ui.import_failed": "Не удалось прочитать файл: {error}",
+        "ui.no_run": "Нет запусков: добавьте экспорт прибора (Файл → Добавить запуск)",
+    }
+)

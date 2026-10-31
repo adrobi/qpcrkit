@@ -92,3 +92,29 @@ EN.update(
         "ui.field.role": "Role", "ui.field.quantity": "Quantity", "ui.field.group": "Group",
     }
 )
+
+EN.update(
+    {
+        "menu.file": "File", "menu.edit": "Edit", "menu.view": "View", "menu.help": "Help",
+        "act.new": "New project", "act.open": "Open…", "act.recent": "Recent", "act.save": "Save",
+        "act.save_as": "Save as…", "act.add_run": "Add run…", "act.import_layout": "Import layout…",
+        "act.export_xlsx": "Export to Excel…", "act.export_csv": "Export to CSV…", "act.export_html": "HTML report…",
+        "act.export_figures": "Figures (SVG)…", "act.exit": "Exit", "act.undo": "Undo", "act.redo": "Redo",
+        "act.dark": "Dark theme", "act.lang_ru": "Русский", "act.lang_en": "English", "act.about": "About",
+        "tab.plate": "Plate", "tab.data": "Data", "tab.std": "Standards", "tab.expr": "Expression", "tab.qc": "QC",
+        "ui.untitled": "untitled",
+        "ui.analysis_failed": "Analysis failed: {error}",
+        "ui.status": "Runs: {runs} · errors: {errors} · warnings: {warnings}",
+        "ui.unsaved_title": "Unsaved changes", "ui.unsaved_text": "Save changes to the project?",
+        "ui.color_by": "Colour:", "ui.color.target": "by target", "ui.color.role": "by role",
+        "ui.selection": "Selected: {n}", "ui.apply": "Apply", "ui.exclude": "Exclude", "ui.include": "Include",
+        "ui.imported": "Imported {imported} of {total}; skipped {skipped}",
+        "ui.about_text": "qpcrkit {version}\nqPCR data analysis. MIT licence.",
+        "ui.filter_project": "qpcrkit project (*.qpcrkit.json)",
+        "ui.filter_tables": "Instrument export (*.csv *.txt *.xlsx)",
+        "ui.filter_layout": "Plate layout (*.platekit.json *.csv *.txt)",
+        "ui.export_failed": "Could not save the file: {error}",
+        "ui.import_failed": "Could not read the file: {error}",
+        "ui.no_run": "No runs yet: add an instrument export (File → Add run)",
+    }
+)
