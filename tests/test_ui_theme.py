@@ -22,3 +22,9 @@ def test_canvas(qapp):
     assert not c.grab().isNull()
     c.set_figure(None)
     assert not c.grab().isNull()
+
+
+def test_checkbox_indicator_styled():
+    from ui.theme import LIGHT
+
+    assert "QCheckBox::indicator" in app_qss(False) and LIGHT["accent"] in app_qss(False)

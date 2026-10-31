@@ -43,6 +43,15 @@ def theme(name: str) -> dict:
     return DARK if name == "dark" else LIGHT
 
 
+def _checkbox_qss(t: dict) -> str:
+    # The platform style draws no frame for an unchecked box on these backgrounds.
+    return (
+        f"QCheckBox::indicator {{ width: 13px; height: 13px; border: 1px solid {t['dim']};"
+        f" border-radius: 3px; background-color: {t['bg']}; }}"
+        f"QCheckBox::indicator:checked {{ background-color: {t['accent']}; border-color: {t['accent']}; }}"
+    )
+
+
 def app_qss(dark: bool) -> str:
     """Explicit application stylesheet for consistent dark/light appearance."""
     if dark:
@@ -65,6 +74,7 @@ def app_qss(dark: bool) -> str:
             "QTabWidget::pane { border: 1px solid #3f3f46; }"
             "QTabBar::tab { background-color: #27272a; color: #a1a1aa; padding: 6px 14px; border: 1px solid #3f3f46; }"
             "QTabBar::tab:selected { background-color: #18181b; color: #ffffff; font-weight: bold; }"
+            + _checkbox_qss(DARK)
         )
     return (
         "QWidget { background-color: #f8fafc; color: #0f172a; font-size: 12px; }"
@@ -85,6 +95,7 @@ def app_qss(dark: bool) -> str:
         "QTabWidget::pane { border: 1px solid #cbd5e1; }"
         "QTabBar::tab { background-color: #e2e8f0; color: #475569; padding: 6px 14px; border: 1px solid #cbd5e1; }"
         "QTabBar::tab:selected { background-color: #ffffff; color: #0f172a; font-weight: bold; }"
+        + _checkbox_qss(LIGHT)
     )
 
 
