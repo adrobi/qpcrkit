@@ -201,3 +201,29 @@ def test_import_summary_survives_recalculation(win, tmp_path):
     assert win.add_run(f)
     win.recalculate_now()
     assert "1" in win.statusBar().currentMessage() and win.last_import_note in win.statusBar().currentMessage()
+
+
+def test_app_icon(qapp):
+    from ui.theme import app_icon
+
+    assert not app_icon().isNull()
+
+
+def test_qt_dialogs_follow_language(qapp):
+    from PySide6.QtCore import QCoreApplication
+
+    from ui.main_window import install_qt_translator
+
+    install_qt_translator("ru")
+    assert QCoreApplication.translate("QPlatformTheme", "Cancel") == "Отмена"
+    install_qt_translator("en")
+    assert QCoreApplication.translate("QPlatformTheme", "Cancel") == "Cancel"
+
+
+def test_unsaved_dialog_buttons_translated(win):
+    import i18n
+
+    i18n.set_language("ru")
+    box, buttons = win._unsaved_box()
+    assert sorted(b.text() for b in buttons) == sorted(["Сохранить", "Не сохранять", "Отмена"])
+    box.deleteLater()

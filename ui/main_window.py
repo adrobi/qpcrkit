@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QLibraryInfo, QLocale, Qt, QTimer, QTranslator
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
@@ -45,9 +45,28 @@ from ui.editor import ProjectEditor
 from ui.plate_view import PlateView
 from ui.result_tabs import ExpressionTab, QcTab, StdCurveTab
 from ui.side_panels import ProjectTree, SettingsPanel
-from ui.theme import app_qss
+from ui.theme import app_icon, app_qss
 
 RECALC_DELAY_MS = 300
+_qt_translator: QTranslator | None = None
+
+
+def install_qt_translator(lang: str) -> None:
+    """Translate Qt's own texts (standard dialog buttons) to match the UI language."""
+    global _qt_translator
+    app = QApplication.instance()
+    if app is None:
+        return
+    if _qt_translator is not None:
+        app.removeTranslator(_qt_translator)
+        _qt_translator = None
+    if lang == "en":
+        return
+    translator = QTranslator(app)
+    path = QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)
+    if translator.load(QLocale(lang), "qtbase", "_", path):
+        app.installTranslator(translator)
+        _qt_translator = translator
 
 
 def _apply_layout_to_runs(project: Project, layout: dict, run_ids: list[str]) -> int:
@@ -60,6 +79,8 @@ class MainWindow(QMainWindow):
         self.config = config or load_config()
         if self.config.language in ("ru", "en"):
             i18n.set_language(self.config.language)
+        install_qt_translator(i18n.current_language())
+        self.setWindowIcon(app_icon())
         self.editor = ProjectEditor()
         self.results: Results | None = None
         self.current_run_id: str | None = None
@@ -419,6 +440,7 @@ class MainWindow(QMainWindow):
 
     def set_language(self, lang: str) -> None:
         i18n.set_language(lang)
+        install_qt_translator(lang)
         self.config.language = lang
         save_config(self.config)
         self.retranslate_ui()
@@ -440,13 +462,22 @@ class MainWindow(QMainWindow):
 
     # --- dialogs (separate methods so tests can replace them) --------------------------------
 
-    def _ask_save(self) -> str:
+    def _unsaved_box(self) -> tuple[QMessageBox, dict]:
         box = QMessageBox(QMessageBox.Icon.Question, tr("ui.unsaved_title"), tr("ui.unsaved_text"), parent=self)
-        buttons = {
-            box.addButton(QMessageBox.StandardButton.Save): "save",
-            box.addButton(QMessageBox.StandardButton.Discard): "discard",
-            box.addButton(QMessageBox.StandardButton.Cancel): "cancel",
-        }
+        buttons = {}
+        for std, key, answer in (
+            (QMessageBox.StandardButton.Save, "ui.btn.save", "save"),
+            (QMessageBox.StandardButton.Discard, "ui.btn.discard", "discard"),
+            (QMessageBox.StandardButton.Cancel, "ui.btn.cancel", "cancel"),
+        ):
+            button = box.addButton(std)
+            button.setText(tr(key))  # explicit, so it does not depend on Qt's own translations
+            buttons[button] = answer
+        box.setDefaultButton(QMessageBox.StandardButton.Save)
+        return box, buttons
+
+    def _ask_save(self) -> str:
+        box, buttons = self._unsaved_box()
         box.exec()
         return buttons.get(box.clickedButton(), "cancel")
 
@@ -507,6 +538,7 @@ class MainWindow(QMainWindow):
 def run(project: Path | None = None) -> int:
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("qpcrkit")
+    app.setWindowIcon(app_icon())
     window = MainWindow()
     try:
         from ui.errors import install_excepthook

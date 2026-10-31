@@ -117,6 +117,7 @@ EN.update(
         "ui.import_failed": "Could not read the file: {error}",
         "ui.crash_text": "Unexpected error: {error}\nYou can save the project and keep working. Please send the report to the developer.",
         "ui.copy_report": "Copy report",
+        "ui.btn.save": "Save", "ui.btn.discard": "Don't save", "ui.btn.cancel": "Cancel",
         "ui.no_run": "No runs yet: add an instrument export (File → Add run)",
     }
 )

@@ -1,0 +1,122 @@
+name: Release
+
+# workflow_dispatch builds and uploads the artifacts; a release is created only for v* tags.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: build (${{ matrix.artifact }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: qpcrkit-windows-x64
+            file: dist/qpcrkit-windows-x64.exe
+          - os: ubuntu-22.04
+            artifact: qpcrkit-linux-x86_64
+            file: qpcrkit-linux-x86_64.tar.gz
+    permissions:
+      contents: read
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Qt runtime libraries (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libxkbcommon-x11-0 libxcb-cursor0 \
+            libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
+            libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xfixes0 libgl1
+      - run: python -m pip install -e ".[dev]" "pyinstaller==6.22.3"
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Build exe (errors surfaced as annotations)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m PyInstaller qpcrkit.spec --noconfirm --workpath build-pyinstaller 2>&1 |
+            Tee-Object -FilePath build_log.txt
+          if ($LASTEXITCODE -ne 0) {
+            $tail = (Get-Content build_log.txt -Tail 30) -join " | "
+            Write-Host "::error::PyInstaller failed, log tail: $tail"
+            exit 1
+          }
+      - name: Build binary (errors surfaced as annotations)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! python -m PyInstaller qpcrkit.spec --noconfirm --workpath build-pyinstaller 2>&1 | tee build_log.txt; then
+            tail_log=$(tail -n 30 build_log.txt | tr '\n' '|')
+            echo "::error::PyInstaller failed, log tail: ${tail_log}"
+            exit 1
+          fi
+
+      - name: Smoke-test frozen exe (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force smoke | Out-Null
+          # The exe is windowed: Start-Process -Wait -PassThru is needed to get the exit code.
+          $p = Start-Process -FilePath dist/qpcrkit.exe -Wait -PassThru -ArgumentList @(
+            "new", "examples/demo_run1.csv", "examples/demo_run2.csv",
+            "--ref", "GAPDH", "--control", "Ctrl", "-o", "smoke/exp.qpcrkit.json")
+          if ($p.ExitCode -ne 0) { Write-Host "::error::smoke test: qpcrkit new exited with $($p.ExitCode)"; exit 1 }
+          $p = Start-Process -FilePath dist/qpcrkit.exe -Wait -PassThru -ArgumentList @(
+            "analyze", "smoke/exp.qpcrkit.json", "-o", "smoke/results.xlsx", "--html", "smoke/report.html")
+          if ($p.ExitCode -ne 0) { Write-Host "::error::smoke test: qpcrkit analyze exited with $($p.ExitCode)"; exit 1 }
+          foreach ($f in "smoke/results.xlsx", "smoke/report.html") {
+            if (-not (Test-Path $f)) { Write-Host "::error::smoke test: $f was not created"; exit 1 }
+          }
+          Rename-Item dist/qpcrkit.exe qpcrkit-windows-x64.exe
+      - name: Smoke-test frozen binary (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -e
+          mkdir -p smoke
+          dist/qpcrkit new examples/demo_run1.csv examples/demo_run2.csv \
+            --ref GAPDH --control Ctrl -o smoke/exp.qpcrkit.json
+          dist/qpcrkit analyze smoke/exp.qpcrkit.json -o smoke/results.xlsx --html smoke/report.html
+          test -f smoke/results.xlsx && test -f smoke/report.html
+
+      - name: Package tarball (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          cp README.md LICENSE dist/
+          tar -czf qpcrkit-linux-x86_64.tar.gz -C dist qpcrkit README.md LICENSE
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.file }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/qpcrkit-windows-x64/qpcrkit-windows-x64.exe
+            artifacts/qpcrkit-linux-x86_64/qpcrkit-linux-x86_64.tar.gz
+          generate_release_notes: true

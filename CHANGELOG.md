@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.0] — 2026-11-01
 
 ### Added
 - Headless core `qpcr_core`: import of Bio-Rad CFX, QuantStudio/7500,
@@ -22,3 +22,5 @@ All notable changes to this project are documented here. The format follows
   analysis settings, CSV import wizard with presets, undo/redo, automatic
   recalculation, light/dark theme, Russian/English, error dialog with a copyable
   report.
+- Application icon; Qt's own dialog buttons follow the interface language.
+- Windows and Linux builds published by GitHub Actions on a version tag.

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 LIGHT = {
     "bg": "#ffffff",
     "panel": "#f8fafc",
@@ -113,3 +116,15 @@ def mpl_style(dark: bool) -> dict:
         "xtick.color": t["dim"],
         "ytick.color": t["dim"],
     }
+
+
+def resource_dir() -> Path:
+    """``ui/`` next to this module, or ``sys._MEIPASS/ui`` in a PyInstaller bundle (see qpcrkit.spec)."""
+    frozen = getattr(sys, "_MEIPASS", None)
+    return Path(frozen) / "ui" if frozen else Path(__file__).resolve().parent
+
+
+def app_icon():
+    from PySide6.QtGui import QIcon
+
+    return QIcon(str(resource_dir() / "icons" / "app" / "qpcrkit.png"))
