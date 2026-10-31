@@ -1,5 +1,3 @@
-"""Left project tree and right analysis-settings panel."""
-
 """Side panels: project tree and settings editor."""
 
 from __future__ import annotations

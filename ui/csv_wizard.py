@@ -1,5 +1,3 @@
-"""Column-mapping dialog for tables qpcrkit does not recognize."""
-
 """Dialog mapping arbitrary table columns to a generic CSV import mapping."""
 
 from __future__ import annotations
