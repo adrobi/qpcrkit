@@ -1,0 +1,20 @@
+Experiment Information
+Run Name,demo
+
+Quantitation data for Cycling A.Green
+No.,Colour,Name,Type,Ct,Given Conc (copies),Calc Conc (copies),% Var
+1,,Ctrl1,Unknown,20.11,,,
+2,,Ctrl1,Unknown,20.19,,,
+3,,NTC,NTC,,,,
+4,,Std 1000,Standard,18.40,1000,998,0.2
+5,,Std 100,Standard,21.72,100,101,1.0
+6,,S1,Unknown,22.00,,,
+
+Quantitation data for Cycling A.Yellow
+No.,Colour,Name,Type,Ct,Given Conc (copies),Calc Conc (copies),% Var
+1,,Ctrl1,Unknown,25.30,,,
+2,,Ctrl1,Unknown,25.33,,,
+3,,NTC,NTC,,,,
+4,,Std 1000,Standard,19.40,1000,998,0.2
+5,,Std 100,Standard,22.72,100,101,1.0
+6,,S1,Unknown,24.00,,,
