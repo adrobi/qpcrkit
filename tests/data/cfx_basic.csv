@@ -1,0 +1,12 @@
+,Well,Fluor,Target,Content,Replicate,Sample,Biological Set Name,Cq,Cq Mean,Cq Std. Dev,Starting Quantity (SQ)
+0,A01,SYBR,GAPDH,Unkn-01,1,Ctrl1 ,Ctrl,20.11,20.15,0.04,
+1,A02,SYBR,GAPDH,Unkn-01,1,Ctrl1,Ctrl,20.15,20.15,0.04,
+2,A03,SYBR,GAPDH,Unkn-01,1,Ctrl1,Ctrl,20.19,20.15,0.04,
+3,A04,SYBR, IL6 ,Unkn-01,1,Ctrl1,Ctrl,25.30,25.31,0.02,
+4,A05,SYBR,IL6,Unkn-01,1,Ctrl1,Ctrl,25.31,25.31,0.02,
+5,A06,SYBR,IL6,Unkn-01,1,Ctrl1,Ctrl,25.33,25.31,0.02,
+6,A07,SYBR,IL6,NTC,,,,NaN,,,
+7,B01,SYBR,IL6,Std-01,,,,18.40,,,1000
+8,B02,SYBR,IL6,Std-02,,,,21.72,,,100
+9,B03,SYBR,IL6,Std-03,,,,25.05,,,10
+10,,SYBR,IL6,Unkn-02,,Broken,,22.0,,,
