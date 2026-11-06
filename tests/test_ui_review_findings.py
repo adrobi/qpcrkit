@@ -346,3 +346,51 @@ def test_table_refuses_a_bad_quantity(qapp, bad):
     m = ReactionModel(ProjectEditor(p))
     assert not m.setData(m.index(0, COLUMNS.index("quantity")), bad, Qt.ItemDataRole.EditRole)
     assert p.runs[0].wells["A1"].reactions[0].quantity == 100.0
+
+
+# --- the check before the release ---
+
+
+def _sybr_plate(win):
+    wells = {f"A{i}": Well(f"A{i}", "s", [Reaction(target="SYBR", fluor="SYBR", cq=20.0)]) for i in range(1, 4)}
+    p = Project(runs=[Run(id="R1", name="R1", wells=wells, thresholds={"SYBR": 0.2})])
+    p.ensure_targets_and_samples()
+    win.editor.set_project(p)
+    return p
+
+
+def test_rename_a_target_on_the_plate(win):
+    _sybr_plate(win)
+    assert win.hint_bar.label.text() == tr("hint.no_target", count=3)
+    win.rename_target("SYBR", "GAPDH")
+    run = win.editor.project.runs[0]
+    assert {r.target for w in run.wells.values() for r in w.reactions} == {"GAPDH"}
+    assert run.thresholds == {"GAPDH": 0.2}
+    assert list(win.editor.project.targets) == ["GAPDH"]
+    win.editor.undo()
+    assert list(win.editor.project.targets) == ["SYBR"]
+
+
+def test_rename_from_the_edit_menu(win, monkeypatch):
+    _sybr_plate(win)
+    monkeypatch.setattr(win, "_ask_rename", lambda names: ("SYBR", "GAPDH") if names == ["SYBR"] else None)
+    action = next(a for m in win.menuBar().actions() for a in m.menu().actions() if a.text() == tr("act.rename_target"))
+    action.trigger()
+    assert list(win.editor.project.targets) == ["GAPDH"]
+
+
+def test_rename_cancelled_or_without_a_run(win, monkeypatch):
+    calls = []
+    monkeypatch.setattr(win, "_ask_rename", lambda names: calls.append(names))
+    win._rename_target_dialog()  # no run yet: nothing to ask
+    assert calls == []
+    _sybr_plate(win)
+    win.editor.mark_saved(Path("x"))
+    win._rename_target_dialog()
+    assert calls == [["SYBR"]] and not win.editor.dirty
+
+
+def test_licenses_of_the_icons_are_bundled():
+    spec = (Path(__file__).resolve().parent.parent / "qpcrkit.spec").read_text(encoding="utf-8")
+    assert '"ui/icons/LICENSE"' in spec
+

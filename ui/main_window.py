@@ -31,6 +31,7 @@ from qpcr_core.editing import (
     apply_plate_map,
     assign_sample,
     fill_series,
+    rename_target_in_run,
     set_excluded,
     set_group,
     set_quantity,
@@ -251,6 +252,7 @@ class MainWindow(QMainWindow):
         self.undo_action = self._action(edit_menu, "act.undo", self.editor.undo, QKeySequence.StandardKey.Undo)
         self.redo_action = self._action(edit_menu, "act.redo", self.editor.redo, QKeySequence.StandardKey.Redo)
         self._action(edit_menu, "act.paste_map", self._paste_plate_map_from_clipboard)
+        self._action(edit_menu, "act.rename_target", self._rename_target_dialog)
         edit_menu.addSeparator()
         self._action(edit_menu, "ui.analysis_settings", self._open_settings)
 
@@ -461,6 +463,26 @@ class MainWindow(QMainWindow):
     def fill_series_selected(self, prefix: str, replicates: int) -> None:
         if sel := self._selection():
             self.editor.apply(fill_series, sel[0], sel[1], prefix, 1, replicates)
+
+    def rename_target(self, old: str, new: str) -> None:
+        """All of a target on this plate: "the SYBR here is GAPDH"."""
+        if self.current_run_id:
+            self.editor.apply(rename_target_in_run, self.current_run_id, old, new)
+
+    def _ask_rename(self, names: list[str]) -> tuple[str, str] | None:
+        old, ok = QInputDialog.getItem(self, tr("act.rename_target"), tr("ui.rename_from"), names, 0, False)
+        if not ok:
+            return None
+        new, ok = QInputDialog.getText(self, tr("act.rename_target"), tr("ui.rename_to"))
+        return (old, new.strip()) if ok and new.strip() else None
+
+    def _rename_target_dialog(self) -> None:
+        if not self.current_run_id:
+            return
+        run = self.editor.project.run(self.current_run_id)
+        names = sorted({r.target for w in run.wells.values() for r in w.reactions if r.target})
+        if names and (answer := self._ask_rename(names)):
+            self.rename_target(*answer)
 
     def _fill_series_dialog(self) -> None:
         if not self._selection():

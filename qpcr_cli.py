@@ -15,7 +15,10 @@ def _inspect(args: argparse.Namespace) -> int:
 
     try:
         rep = import_file(args.file, "R1")
-    except (UnknownFormatError, UnsupportedFileError):
+    except UnsupportedFileError:
+        print(tr("ui.unsupported_file", name=args.file), file=sys.stderr)
+        return 2
+    except UnknownFormatError:
         print(tr("cli.unknown_format", path=args.file), file=sys.stderr)
         return 2
     except (OSError, ValueError) as exc:
@@ -56,7 +59,10 @@ def _new(args: argparse.Namespace) -> int:
             layout = reader(args.layout)
             for run in project.runs:
                 apply_layout(project, run.id, layout)
-    except (UnknownFormatError, UnsupportedFileError) as exc:
+    except UnsupportedFileError as exc:
+        print(tr("ui.unsupported_file", name=exc), file=sys.stderr)
+        return 2
+    except UnknownFormatError as exc:
         print(tr("cli.unknown_format", path=exc), file=sys.stderr)
         return 2
     except (OSError, ValueError) as exc:

@@ -134,6 +134,7 @@ def tr(key: str, **kwargs) -> str:
 def current_language() -> str:
     return _lang
 
+RU.update({"act.rename_target": "Переименовать мишень на планшете…", "ui.rename_from": "Мишень на этом планшете:", "ui.rename_to": "Новое имя:"})
 RU.update({"ui.bad_quantity": "Количество должно быть положительным числом"})
 RU.update(
     {

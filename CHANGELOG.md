@@ -4,9 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.0] — 2026-11-07
 
 ### Added
+- A new workspace: navigation with the runs on the left, reference and control chips on top, a hint line that says what is missing next, a start screen with drag and drop and a demo project.
+- Curve analysis: baseline, Cq at a common threshold, per-well efficiency in a window of linearity, melt peaks and Tm, compared with instrument results on real files. The instrument's Cq stays the default; Cq and efficiency from curves are an explicit choice.
+- The curve graph beside the plate and linked with it, a threshold line that can be dragged, per-run manual thresholds with an Auto button.
+- New QC from curves: several melt peaks, Tm shift, a product or dimers in the NTC, disagreement with the instrument's Cq, very early Cq, Cq without amplification, mixed Cq sources, thresholds that differ without calibrators.
+- Exclude a standard by clicking its point; save the expression figure from its page; curve columns in the data table, a Curves sheet in the workbook, curve figures in the HTML report and in the exported figures; `qpcrkit analyze --cq-source`.
 - QuantStudio Design & Analysis workbooks; RDML 1.0 and 1.1; several CFX files or a whole folder as one run.
 - Amplification and melt curves are imported and stored in the project.
 - Assign targets to wells, rename a target on a plate, name samples in series, paste a plate map from a spreadsheet.
@@ -14,6 +19,8 @@ All notable changes to this project are documented here. The format follows
 - Reference genes and calibrator named by the file are offered after import.
 
 ### Changed
+- A calm theme with a teal accent and line icons; analysis settings moved to a dialog, reference and control to the top bar.
+- Project files are smaller: curves of a run share one axis.
 - The theme follows the system by default; light and dark can still be chosen.
 - Wells without a sample are no longer treated as replicates of each other.
 
@@ -24,6 +31,7 @@ All notable changes to this project are documented here. The format follows
 - QC messages show the thresholds from the settings.
 - Command line: a missing file, a locked xlsx or an unknown `--ref`/`--control` give a message instead of a traceback.
 - Target names cannot break figure file names; the standards tab keeps the selected curve.
+- A wrong quantity is refused instead of breaking the standard curve.
 
 ## [1.0.0] — 2026-11-01
 

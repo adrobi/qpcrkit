@@ -51,6 +51,7 @@ EN: dict[str, str] = {
     "sheet.params": "Analysis parameters",
 }
 
+EN.update({"act.rename_target": "Rename a target on this plate…", "ui.rename_from": "Target on this plate:", "ui.rename_to": "New name:"})
 EN.update({"ui.bad_quantity": "The quantity must be a positive number"})
 EN.update(
     {

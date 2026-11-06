@@ -79,6 +79,19 @@ def test_gui_launch(monkeypatch):
     assert calls == [None, None, Path("x.qpcrkit.json")]
 
 
+@pytest.mark.parametrize("command", ["inspect", "new"])
+def test_binary_file_tells_what_to_export(tmp_path, capsys, command):
+    from i18n import tr
+
+    p = tmp_path / "plate.pcrd"
+    p.write_bytes(b"PK\x03\x04binary")
+    args = ["inspect", str(p)] if command == "inspect" else ["new", str(p), "-o", str(tmp_path / "o.json")]
+    assert main(args) == 2
+    err = capsys.readouterr().err
+    assert tr("ui.unsupported_file", name="X").split("X")[0] in err
+    assert "wizard" not in err and "мастер" not in err
+
+
 def test_new_accepts_a_folder(tmp_path):
     src = ROOT / "tests" / "data" / "real"
     folder = tmp_path / "plate"
