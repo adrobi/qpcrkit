@@ -53,6 +53,19 @@ EN: dict[str, str] = {
 
 EN.update(
     {
+        "ui.curves.amp": "Amplification",
+        "ui.curves.log": "Amplification, log",
+        "ui.curves.melt": "Melt",
+        "ui.curves.all": "All targets",
+        "ui.curves.none": "This run has no such curves",
+        "ui.curves.cycle": "Cycle",
+        "ui.curves.signal": "Signal, background removed",
+        "ui.curves.temperature": "Temperature, °C",
+        "ui.curves.dfdt": "-dF/dT",
+    }
+)
+EN.update(
+    {
         "ui.select_wells": "Select wells on the plate",
         "ui.mixed": "several values",
     }

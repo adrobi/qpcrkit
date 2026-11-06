@@ -53,6 +53,7 @@ from qpcr_core.sessions import SessionError, load_project
 from qpcr_core.sessions import save_project as write_project
 from ui.analysis_dialog import AnalysisDialog
 from ui.csv_wizard import CsvWizard
+from ui.curve_view import CurveView
 from ui.data_table import DataTable
 from ui.editor import ProjectEditor
 from ui.plate_view import PlateView
@@ -132,6 +133,8 @@ class MainWindow(QMainWindow):
         self.plate = PlateView()
         self.plate.selection_changed.connect(self._update_selection)
         self.plate.exclude_toggled.connect(self._toggle_exclusion)
+        self.curves = CurveView()
+        self.curves.wells_clicked.connect(self._on_wells_clicked)
         self.data = DataTable(self.editor)
         self.std = StdCurveTab()
         self.expr = ExpressionTab(self.editor)
@@ -198,6 +201,9 @@ class MainWindow(QMainWindow):
 
         self.plate_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.plate_splitter.addWidget(left)
+        self.plate_splitter.addWidget(self.curves)
+        self.plate_splitter.setStretchFactor(0, 1)
+        self.plate_splitter.setStretchFactor(1, 1)
         return self.plate_splitter
 
     def _build_menus(self) -> None:
@@ -276,6 +282,7 @@ class MainWindow(QMainWindow):
         self.plate.set_run(run, self.editor.project)
         if coords:
             self.plate.select_coords(coords)
+        self.curves.set_data(self.editor.project, self.results, self.current_run_id)
 
     def recalculate_now(self) -> None:
         self._timer.stop()
@@ -288,6 +295,7 @@ class MainWindow(QMainWindow):
         self.results = results
         for tab in (self.std, self.expr, self.qc):
             tab.set_results(project, results, self.dark)
+        self.curves.set_data(project, results, self.current_run_id)
         self.nav.set_qc_count(len(results.flags_by_severity("error")), len(results.flags_by_severity("warning")))
         if not project.runs:
             self.statusBar().showMessage(tr("ui.no_run"))
@@ -326,7 +334,14 @@ class MainWindow(QMainWindow):
     def _update_selection(self) -> None:
         project = self.editor.project
         run = project.run(self.current_run_id) if self.current_run_id else None
-        self.selection.set_selection(project, run, self.plate.selected_coords())
+        coords = self.plate.selected_coords()
+        self.selection.set_selection(project, run, coords)
+        self.curves.set_selection(coords)
+
+    def _on_wells_clicked(self, coords: list[str], add: bool) -> None:
+        if add:
+            coords = sorted(set(self.plate.selected_coords()) ^ set(coords))
+        self.plate.select_coords(coords)
 
     def _selection(self) -> tuple[str, list[str]] | None:
         coords = self.plate.selected_coords()
@@ -566,6 +581,7 @@ class MainWindow(QMainWindow):
         if app is not None and app.styleSheet() != app_qss(dark):  # re-setting repolishes every widget
             app.setStyleSheet(app_qss(dark))
         self.plate.set_theme(dark)
+        self.curves.set_theme(dark)
         self.nav.set_theme(dark)
         self.top_bar.set_theme(dark)
         if self.results is not None:
@@ -587,6 +603,7 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self.go_to(page)
         self.plate.set_theme(self.dark)
+        self.curves.set_theme(self.dark)
         self.nav.set_theme(self.dark)
         self.top_bar.set_theme(self.dark)
         self._on_project_changed()

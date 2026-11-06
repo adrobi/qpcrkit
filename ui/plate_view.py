@@ -24,6 +24,11 @@ TARGET_PALETTE = [
     "#4f46e5",
 ]
 
+def target_color_map(names) -> dict[str, str]:
+    """A color per target name; the plate and the curves must agree."""
+    return {name: TARGET_PALETTE[i % len(TARGET_PALETTE)] for i, name in enumerate(sorted(names))}
+
+
 ROLE_COLORS = {
     "unknown": "#2563eb",
     "ntc": "#9ca3af",

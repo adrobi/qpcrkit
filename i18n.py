@@ -136,6 +136,19 @@ def current_language() -> str:
 
 RU.update(
     {
+        "ui.curves.amp": "Амплификация",
+        "ui.curves.log": "Амплификация, логарифм",
+        "ui.curves.melt": "Плавление",
+        "ui.curves.all": "Все мишени",
+        "ui.curves.none": "В этом запуске нет таких кривых",
+        "ui.curves.cycle": "Цикл",
+        "ui.curves.signal": "Сигнал без фона",
+        "ui.curves.temperature": "Температура, °C",
+        "ui.curves.dfdt": "-dF/dT",
+    }
+)
+RU.update(
+    {
         "ui.select_wells": "Выделите лунки на планшете",
         "ui.mixed": "несколько значений",
     }
