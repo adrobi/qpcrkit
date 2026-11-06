@@ -70,3 +70,34 @@ def test_empty(qapp):
     v = PlateView()
     v.set_run(None, None)
     assert not v.grab().isNull()
+
+
+def _plate_of(fmt):
+    from qpcr_core.models import Project, Reaction, Run, Well
+
+    coord = "P24" if fmt == 384 else "H12"
+    run = Run(id="R", name="R", plate_format=fmt, wells={coord: Well(coord, "s", [Reaction(target="T", cq=20.0)])})
+    return run, Project(runs=[run])
+
+
+def test_384_plate_is_compact(qapp):
+    from ui.plate_view import PlateView
+
+    view = PlateView()
+    view.resize(500, 340)
+    view.set_run(*_plate_of(384))
+    assert view.compact is True
+    assert not view.grab().isNull()
+    view.select_coords(["P24"])
+    assert view.selected_coords() == ["P24"]
+    assert view.header_rect("col", 23).isValid()
+
+
+def test_96_plate_is_not_compact(qapp):
+    from ui.plate_view import PlateView
+
+    view = PlateView()
+    view.set_run(*_plate_of(96))
+    assert view.compact is False
+    view.set_run(None, None)
+    assert view.compact is False

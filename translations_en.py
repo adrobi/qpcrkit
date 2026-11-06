@@ -53,6 +53,12 @@ EN: dict[str, str] = {
 
 EN.update(
     {
+        "ui.select_wells": "Select wells on the plate",
+        "ui.mixed": "several values",
+    }
+)
+EN.update(
+    {
         "ui.analysis_settings": "Analysis settings",
         "ui.qc_count": "Errors: {errors}, warnings: {warnings}",
         "ui.chip.reference": "Reference: {value}",

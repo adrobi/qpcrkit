@@ -48,6 +48,7 @@ class PlateView(QWidget):
         self.project: Project | None = None
         self.dark: bool = False
         self.color_mode: str = "target"
+        self.compact: bool = False  # a 384 plate: no labels in the wells, small headers
         self._selection: set[tuple[int, int]] = set()
         self._target_colors: dict[str, str] = {}
         self._drag_start: tuple[int, int] | None = None
@@ -62,6 +63,7 @@ class PlateView(QWidget):
         """Bind the view to a run and project."""
         self.run = run
         self.project = project
+        self.compact = bool(run and run.plate_format == 384)
         self._build_target_colors()
         self._selection.clear()
         self.update()
@@ -280,7 +282,7 @@ class PlateView(QWidget):
 
         header_font = QFont(self.font())
         header_font.setBold(True)
-        header_font.setPointSize(max(6, min(10, int(cell * 0.24))))
+        header_font.setPointSize(7 if self.compact else max(6, min(10, int(cell * 0.24))))
         painter.setFont(header_font)
 
         corner = QRectF(x0 - h, y0 - h, h, h).adjusted(1, 1, -1, -1)
@@ -342,7 +344,7 @@ class PlateView(QWidget):
                         QRectF(rect.right() - mark - 2, rect.top() + 2, mark, mark)
                     )
 
-                if cell >= 12:
+                if cell >= 12 and not self.compact:
                     font = QFont(self.font())
                     font.setPointSize(max(6, min(11, int(cell * 0.24))))
                     painter.setFont(font)

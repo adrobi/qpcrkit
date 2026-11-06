@@ -135,7 +135,7 @@ def test_apply_bar_keeps_role_when_not_chosen(demo):
     demo.select_run("R1")
     std = next(c for c, w in demo.editor.project.run("R1").wells.items() if w.reactions[0].role == "std")
     demo.plate.select_coords([std])
-    demo.sample_edit.setText("S-std")
+    demo.selection.sample_edit.setText("S-std")
     demo._apply_bar()
     w = demo.editor.project.run("R1").wells[std]
     assert w.sample == "S-std" and w.reactions[0].role == "std"
@@ -253,7 +253,7 @@ def _unnamed(win):
 def test_target_field_assigns_target(win):
     _unnamed(win)
     win.plate.select_coords(["A1", "A2"])
-    win.target_edit.setText("GAPDH")
+    win.selection.target_edit.setText("GAPDH")
     win._apply_bar()
     wells = win.editor.project.run("R1").wells
     assert wells["A1"].reactions[0].target == "GAPDH" and wells["A3"].reactions[0].target == "SYBR"
@@ -279,7 +279,7 @@ def test_paste_plate_map(win):
 def test_group_without_samples_explains(win):
     _unnamed(win)
     win.plate.select_coords(["A1"])
-    win.group_edit.setText("Ctrl")
+    win.selection.group_edit.setText("Ctrl")
     before = win.editor.dirty, len(win.editor.project.samples)
     win.editor.mark_saved(Path("x"))
     win._apply_bar()

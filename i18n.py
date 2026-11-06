@@ -136,6 +136,12 @@ def current_language() -> str:
 
 RU.update(
     {
+        "ui.select_wells": "Выделите лунки на планшете",
+        "ui.mixed": "несколько значений",
+    }
+)
+RU.update(
+    {
         "ui.analysis_settings": "Настройки анализа",
         "ui.qc_count": "Ошибок: {errors}, предупреждений: {warnings}",
         "ui.chip.reference": "Референс: {value}",

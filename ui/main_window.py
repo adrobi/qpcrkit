@@ -14,10 +14,9 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QInputDialog,
-    QLineEdit,
     QMainWindow,
     QMessageBox,
-    QPushButton,
+    QSplitter,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -48,7 +47,7 @@ from qpcr_core.importers.generic_csv import ColumnMapping
 from qpcr_core.importers.grouping import group_files
 from qpcr_core.importers.platekit import apply_layout, read_instrument_layout, read_platekit_json
 from qpcr_core.importers.textio import parse_number, read_rows
-from qpcr_core.models import ROLES, Project
+from qpcr_core.models import Project
 from qpcr_core.pipeline import Results, analyze
 from qpcr_core.sessions import SessionError, load_project
 from qpcr_core.sessions import save_project as write_project
@@ -57,6 +56,7 @@ from ui.csv_wizard import CsvWizard
 from ui.data_table import DataTable
 from ui.editor import ProjectEditor
 from ui.plate_view import PlateView
+from ui.selection_panel import SelectionPanel
 from ui.result_tabs import ExpressionTab, QcTab, StdCurveTab
 from ui.shell import PAGES, HintBar, NavRail, TopBar
 from ui.theme import app_icon, app_qss, resolve_dark, system_is_dark
@@ -130,7 +130,7 @@ class MainWindow(QMainWindow):
         self.hint_bar = HintBar()
 
         self.plate = PlateView()
-        self.plate.selection_changed.connect(self._update_selection_label)
+        self.plate.selection_changed.connect(self._update_selection)
         self.plate.exclude_toggled.connect(self._toggle_exclusion)
         self.data = DataTable(self.editor)
         self.std = StdCurveTab()
@@ -176,37 +176,29 @@ class MainWindow(QMainWindow):
         self._build_menus()
 
     def _plate_page(self) -> QWidget:
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        bar = QHBoxLayout()
-        self.selection_label = QLabel()
-        self.target_edit = QLineEdit(placeholderText=tr("ui.target"))
-        self.sample_edit = QLineEdit(placeholderText=tr("ui.col.sample"))
-        self.group_edit = QLineEdit(placeholderText=tr("ui.col.group"))
-        self.role_combo = QComboBox()
-        self.role_combo.addItem(tr("ui.none"), None)  # leave roles unchanged
-        for role in ROLES:
-            self.role_combo.addItem(tr(f"ui.role.{role}"), role)
-        self.quantity_edit = QLineEdit(placeholderText=tr("ui.col.quantity"))
-        apply_btn = QPushButton(tr("ui.apply"))
-        apply_btn.clicked.connect(self._apply_bar)
-        series_btn = QPushButton(tr("ui.series"))
-        series_btn.clicked.connect(self._fill_series_dialog)
-        exclude_btn = QPushButton(tr("ui.exclude"))
-        exclude_btn.clicked.connect(lambda: self._set_selection_excluded(True))
-        include_btn = QPushButton(tr("ui.include"))
-        include_btn.clicked.connect(lambda: self._set_selection_excluded(False))
+        self.selection = SelectionPanel()
+        self.selection.apply_requested.connect(self._apply_bar)
+        self.selection.series_requested.connect(self._fill_series_dialog)
+        self.selection.exclude_requested.connect(self._set_selection_excluded)
         self.color_combo = QComboBox()
         self.color_combo.addItem(tr("ui.color.target"), "target")
         self.color_combo.addItem(tr("ui.color.role"), "role")
         self.color_combo.currentIndexChanged.connect(lambda: self.plate.set_color_mode(self.color_combo.currentData()))
-        for w in (self.selection_label, self.target_edit, self.sample_edit, self.group_edit, self.role_combo,
-                  self.quantity_edit, apply_btn, series_btn, exclude_btn, include_btn, QLabel(tr("ui.color_by")),
-                  self.color_combo):
-            bar.addWidget(w)
-        layout.addLayout(bar)
-        layout.addWidget(self.plate, 1)
-        return page
+
+        left = QWidget()
+        left_layout = QVBoxLayout(left)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        bar = QHBoxLayout()
+        bar.addStretch(1)
+        bar.addWidget(QLabel(tr("ui.color_by")))
+        bar.addWidget(self.color_combo)
+        left_layout.addLayout(bar)
+        left_layout.addWidget(self.plate, 1)
+        left_layout.addWidget(self.selection)
+
+        self.plate_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.plate_splitter.addWidget(left)
+        return self.plate_splitter
 
     def _build_menus(self) -> None:
         mb = self.menuBar()
@@ -331,8 +323,10 @@ class MainWindow(QMainWindow):
 
     # --- plate actions -----------------------------------------------------------------------
 
-    def _update_selection_label(self) -> None:
-        self.selection_label.setText(tr("ui.selection", n=len(self.plate.selected_coords())))
+    def _update_selection(self) -> None:
+        project = self.editor.project
+        run = project.run(self.current_run_id) if self.current_run_id else None
+        self.selection.set_selection(project, run, self.plate.selected_coords())
 
     def _selection(self) -> tuple[str, list[str]] | None:
         coords = self.plate.selected_coords()
@@ -355,14 +349,14 @@ class MainWindow(QMainWindow):
         if not (sel := self._selection()):
             return
         run_id, coords = sel
-        target = self.target_edit.text().strip()
-        sample, group = self.sample_edit.text().strip(), self.group_edit.text().strip()
+        target = self.selection.target_edit.text().strip()
+        sample, group = self.selection.sample_edit.text().strip(), self.selection.group_edit.text().strip()
         wells = self.editor.project.run(run_id).wells
         if group and not sample and not any(wells[c].sample for c in coords):
             self.statusBar().showMessage(tr("ui.group_needs_sample"))
             return
-        role = self.role_combo.currentData()
-        qty_text = self.quantity_edit.text().strip()
+        role = self.selection.role_combo.currentData()
+        qty_text = self.selection.quantity_edit.text().strip()
         quantity = parse_number(qty_text) if qty_text else None
 
         def edit(p: Project) -> None:
@@ -378,6 +372,7 @@ class MainWindow(QMainWindow):
                 for s in {p.run(run_id).wells[c].sample for c in coords} - {None}:
                     set_group(p, s, group)
 
+        self.selection.clear_fields()
         self.editor.apply(edit)
 
     def fill_series_selected(self, prefix: str, replicates: int) -> None:
