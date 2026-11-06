@@ -14,7 +14,7 @@ class AnalysisDialog(QDialog):
         super().__init__(parent)
         self.editor = editor
         self.setWindowTitle(tr("ui.analysis_settings"))
-        self.resize(460, 620)
+        self.resize(640, 680)
         self.panel = SettingsPanel(editor)
         layout = QVBoxLayout(self)
         layout.addWidget(self.panel, 1)

@@ -54,7 +54,6 @@ EN: dict[str, str] = {
 EN.update(
     {
         "ui.col.cq_calc": "Cq from curve",
-        "ui.col.efficiency": "E",
         "ui.col.tm": "Tm",
         "ui.save_figure": "Save figure…",
         "ui.filter_figure": "Figures (*.svg *.png *.pdf)",
@@ -78,7 +77,8 @@ EN.update(
 EN.update(
     {
         "start.title": "Drop instrument files here",
-        "start.note": "Several files or a folder at once: CFX, QuantStudio, Rotor-Gene, RDML, CSV",
+        "start.note": "Several files or a folder: CFX, QuantStudio, Rotor-Gene, RDML, CSV",
+        "ui.role_keep": "Role: unchanged",
         "start.add": "Choose files…",
         "start.open": "Open project…",
         "start.demo": "Demo data",
@@ -172,7 +172,7 @@ EN.update(
         "ui.add_run": "Add run…", "ui.import_layout": "Import layout…",
         "ui.wells_n": "{n} wells",
         "ui.references": "Reference genes", "ui.control_group": "Control group",
-        "ui.efficiency": "Efficiency", "ui.eff.stdcurve": "from curve", "ui.eff.manual": "manual", "ui.eff.ideal": "100 %",
+        "ui.efficiency": "Efficiency", "ui.eff.stdcurve": "from standards", "ui.eff.manual": "manual", "ui.eff.ideal": "100 %",
         "ui.test": "Post-hoc test", "ui.test.dunnett": "Dunnett (vs control)", "ui.test.tukey": "Tukey (all pairs)",
         "ui.thresholds": "QC thresholds",
         "ui.set.rep_sd_max": "Replicate SD, max", "ui.set.ntc_cq_min": "NTC Cq, min", "ui.set.late_cq": "Late Cq",

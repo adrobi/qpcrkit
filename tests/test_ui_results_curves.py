@@ -216,3 +216,44 @@ def test_export_figures_has_the_curves(win, tmp_path):
     win.recalculate_now()
     assert win.export("figures", tmp_path)
     assert list(tmp_path.glob("amplification_*.svg")) and list(tmp_path.glob("melt_*.svg"))
+
+
+# --- what the screenshots showed ---
+
+
+def test_standard_curve_figure_gets_most_of_the_page(demo):
+    from PySide6.QtWidgets import QApplication
+
+    demo.go_to("std")
+    demo.resize(1400, 860)
+    demo.show()
+    QApplication.processEvents()
+    figure, table = demo.std.splitter.sizes()
+    assert figure >= 2 * table
+    demo.hide()
+
+
+def test_result_tables_fill_their_width_and_have_no_row_numbers(demo):
+    for table in (demo.std._table_widget, demo.expr._groups_table, demo.expr._comparisons_table):
+        assert table.horizontalHeader().stretchLastSection()
+        assert not table.verticalHeader().isVisible()
+
+
+def test_settings_dialog_has_no_sideways_scrolling(win):
+    from PySide6.QtWidgets import QScrollArea
+
+    area = win.analysis.panel.findChild(QScrollArea)
+    assert area.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+    assert win.analysis.width() >= 600
+
+
+def test_efficiency_modes_say_what_they_are_from(win):
+    from i18n import tr
+
+    assert tr("ui.eff.stdcurve") != tr("ui.eff.curves")
+
+
+def test_role_field_says_it_is_a_role(win):
+    from i18n import tr
+
+    assert win.selection.role_combo.itemText(0) == tr("ui.role_keep")

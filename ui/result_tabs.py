@@ -50,6 +50,9 @@ def _table(widget: QTableWidget, headers: list[str], rows: list[list[object]]) -
             item = QTableWidgetItem(text)
             item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             widget.setItem(row_index, column_index, item)
+    widget.verticalHeader().setVisible(False)
+    widget.horizontalHeader().setStretchLastSection(True)
+    widget.resizeColumnsToContents()
 
 
 class StdCurveTab(QWidget):
@@ -83,12 +86,13 @@ class StdCurveTab(QWidget):
 
         self._canvas = FigureCanvas(tr("ui.no_curves"))
         self._table_widget = QTableWidget()
-        splitter = QSplitter(Qt.Orientation.Vertical)
-        splitter.addWidget(self._canvas)
-        splitter.addWidget(self._table_widget)
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 1)
-        layout.addWidget(splitter, 1)
+        self.splitter = QSplitter(Qt.Orientation.Vertical)
+        self.splitter.addWidget(self._canvas)
+        self.splitter.addWidget(self._table_widget)
+        self.splitter.setStretchFactor(0, 3)
+        self.splitter.setStretchFactor(1, 1)
+        self.splitter.setSizes([3000, 800])
+        layout.addWidget(self.splitter, 1)
 
         _table(self._table_widget, self._headers, [])
 

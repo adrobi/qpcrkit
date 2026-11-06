@@ -223,6 +223,7 @@ class MainWindow(QMainWindow):
         self.plate_splitter.addWidget(self.curves)
         self.plate_splitter.setStretchFactor(0, 1)
         self.plate_splitter.setStretchFactor(1, 1)
+        self.plate_splitter.setSizes([1000, 1000])
         return self.plate_splitter
 
     def _build_menus(self) -> None:

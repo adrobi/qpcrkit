@@ -23,7 +23,7 @@ class SelectionPanel(QWidget):
         self.group_edit = QLineEdit()
         self.quantity_edit = QLineEdit()
         self.role_combo = QComboBox()
-        self.role_combo.addItem(tr("ui.none"), None)  # leave roles unchanged
+        self.role_combo.addItem(tr("ui.role_keep"), None)  # leave roles unchanged
         for role in ROLES:
             self.role_combo.addItem(tr(f"ui.role.{role}"), role)
         self.apply_button = QPushButton(tr("ui.apply"))

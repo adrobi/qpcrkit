@@ -504,3 +504,43 @@ def test_window_auto_button_goes_back(curve_win):
     v.auto_button.click()
     assert curve_win.editor.project.runs[0].thresholds == {}
     assert v.threshold_value() == pytest.approx(before)
+
+
+# --- what the screenshots showed ---
+
+
+def test_axis_label_fits_a_narrow_graph(view):
+    view.figure.set_size_inches(3.2, 4.0)
+    view._fit_margins()
+    view.canvas.draw()
+    renderer = view.canvas.get_renderer()
+    assert view.ax.yaxis.label.get_window_extent(renderer).x0 >= 0
+    assert view.ax.xaxis.label.get_window_extent(renderer).y0 >= 0
+
+
+def test_threshold_stays_bright_over_the_veil(view):
+    """Dimming must not hide the line the user is about to drag."""
+    _single(view)
+    line_color = view.threshold_line.get_color()
+    view.set_selection(["A1"])
+    view.canvas.draw()
+    assert view.threshold_line.get_animated() is True
+    assert line_color == theme_text(view)
+
+
+def theme_text(view):
+    from ui.theme import theme
+
+    return theme("dark" if view.dark else "light")["text"]
+
+
+def test_threshold_color_follows_the_theme(view):
+    _single(view)
+    view.set_theme(True)
+    assert view.threshold_line.get_color() == theme_text(view)
+
+
+def test_graph_and_plate_share_the_page_equally(curve_win):
+    """Offscreen has no fonts to measure, so the sizes themselves were checked on Windows: 583 and 583."""
+    s = curve_win.plate_splitter
+    assert s.widget(0).sizePolicy().horizontalStretch() == s.widget(1).sizePolicy().horizontalStretch() == 1

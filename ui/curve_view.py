@@ -7,6 +7,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
+from matplotlib.patches import Rectangle
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QToolTip, QVBoxLayout, QWidget
@@ -38,7 +39,7 @@ class CurveView(QWidget):
         self._coords: list[str] = []  # one per drawn curve
         self._curves: list[np.ndarray] = []  # N x 2, data coordinates
         self._layers: dict[str, LineCollection] = {}
-        self._backgrounds: dict[bool, object] = {}
+        self._background = None
         self._dimmed = False
         self._segments_px: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
         self.threshold_line: Line2D | None = None
@@ -61,11 +62,14 @@ class CurveView(QWidget):
         self.placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.figure = Figure()
-        self.figure.subplots_adjust(left=0.11, right=0.98, top=0.97, bottom=0.11)
         self.ax = self.figure.add_subplot()
         self.canvas = FigureCanvasQTAgg(self.figure)
         self._top = LineCollection([], linewidths=1.8, animated=True)  # drawn over a saved background
         self.ax.add_collection(self._top)
+        # A veil over the saved picture dims the curves without drawing them again: one full draw
+        # of 768 curves takes 300 ms, and a selection has 100.
+        self._veil = Rectangle((0, 0), 1, 1, transform=self.ax.transAxes, alpha=1 - _DIM_ALPHA, animated=True, zorder=2)
+        self.ax.add_patch(self._veil)
 
         bar = QHBoxLayout()
         bar.setContentsMargins(0, 0, 0, 0)
@@ -82,13 +86,21 @@ class CurveView(QWidget):
         self._hover_timer = QTimer(self, singleShot=True, interval=_HOVER_MS)
         self._hover_timer.timeout.connect(self._show_hover)
         self.canvas.mpl_connect("draw_event", self._on_draw)
+        self.canvas.mpl_connect("resize_event", self._fit_margins)
         self.canvas.mpl_connect("button_press_event", self._on_press)
         self.canvas.mpl_connect("motion_notify_event", self._on_motion)
         self.canvas.mpl_connect("button_release_event", self._on_release)
         self.mode_combo.currentIndexChanged.connect(self._rebuild)
         self.target_combo.currentIndexChanged.connect(self._rebuild)
         self._apply_theme()
+        self._fit_margins()
         self._rebuild()
+
+    def _fit_margins(self, *_args) -> None:
+        """Margins in pixels: as fractions they cut the axis labels on a narrow graph."""
+        width, height = self.figure.bbox.width, self.figure.bbox.height
+        if width > 120 and height > 120:
+            self.figure.subplots_adjust(left=66 / width, right=1 - 12 / width, bottom=44 / height, top=1 - 10 / height)
 
     # --- data --------------------------------------------------------------------------------
 
@@ -145,17 +157,17 @@ class CurveView(QWidget):
         self.canvas.setVisible(has_lines)
         self.placeholder.setVisible(not has_lines)
         self._set_axes()
-        self._backgrounds = {}
+        self._background = None
         self._segments_px = None
         self._update_top()
-        self._set_dim(bool(self._top.get_segments()))
-        self._update_threshold(colors)
+        self._dimmed = bool(self._top.get_segments())
+        self._update_threshold()
         self.canvas.draw_idle()
 
     def threshold_value(self) -> float | None:
         return float(self.threshold_line.get_ydata()[0]) if self.threshold_line is not None else None
 
-    def _update_threshold(self, colors: dict[str, str]) -> None:
+    def _update_threshold(self) -> None:
         """A line only for one target on the graph: on several it would not say whose it is."""
         if self.threshold_line is not None:
             self.threshold_line.remove()
@@ -173,7 +185,9 @@ class CurveView(QWidget):
         self._threshold_target = target
         self.auto_button.setVisible(target in run.thresholds)
         if value:
-            self.threshold_line = self.ax.axhline(value, color=colors.get(target, "#2563eb"), linestyle="--", linewidth=1.2)
+            color = theme("dark" if self.dark else "light")["text"]
+            # Drawn with the top layer, over the veil: dimming must not hide what can be dragged.
+            self.threshold_line = self.ax.axhline(value, color=color, linestyle="--", linewidth=1.2, animated=True)
 
     def _near_threshold(self, event) -> bool:
         if self.threshold_line is None or event.inaxes is not self.ax:
@@ -183,18 +197,21 @@ class CurveView(QWidget):
 
     def _move_threshold(self, value: float) -> None:
         self.threshold_line.set_ydata([value, value])
-        if self._dimmed in self._backgrounds:
-            self.canvas.restore_region(self._backgrounds[self._dimmed])
+        self._repaint()
+
+    def _repaint(self) -> None:
+        if self._background is None:
+            self.canvas.draw()
+            return
+        self.canvas.restore_region(self._background)
         self._paint_top()
 
     def _on_release(self, event) -> None:
         if self._drag_from is None:
             return
         start, self._drag_from = self._drag_from, None
-        self.threshold_line.set_animated(False)
         inside = event.inaxes is self.ax and event.ydata is not None and event.ydata > 0
-        self.threshold_line.set_ydata([event.ydata if inside else start] * 2)
-        self.canvas.draw_idle()
+        self._move_threshold(event.ydata if inside else start)
         if inside:
             self.threshold_changed.emit(self._threshold_target, float(event.ydata))
 
@@ -229,33 +246,25 @@ class CurveView(QWidget):
         self._update_top()
         if not self._curves:
             return
-        dim = bool(self._top.get_segments())
-        self._set_dim(dim)
-        if dim not in self._backgrounds:
-            self.canvas.draw()  # saves the background and paints the top layer
-            return
-        self.canvas.restore_region(self._backgrounds[dim])
-        self._paint_top()
+        self._dimmed = bool(self._top.get_segments())
+        self._repaint()
 
     def _update_top(self) -> None:
         wanted = set(self._selected)
         lines = [xy for coord, xy in zip(self._coords, self._curves) if coord in wanted]
         self._top.set_segments(self._for_axis(lines))
 
-    def _set_dim(self, dim: bool) -> None:
-        self._dimmed = dim
-        for layer in self._layers.values():
-            layer.set_alpha(_DIM_ALPHA if dim else 1.0)
-
     def _on_draw(self, _event) -> None:
         """After every full draw, which also happens on a resize: the saved pictures are out of date."""
-        self._backgrounds = {self._dimmed: self.canvas.copy_from_bbox(self.figure.bbox)}
+        self._background = self.canvas.copy_from_bbox(self.figure.bbox)
         self._segments_px = None
         self._paint_top()
 
     def _paint_top(self) -> None:
+        if self._dimmed:
+            self.ax.draw_artist(self._veil)
         self.ax.draw_artist(self._top)
-        if self.threshold_line is not None and self.threshold_line.get_animated():
+        if self.threshold_line is not None:
             self.ax.draw_artist(self.threshold_line)
         self.canvas.blit(self.figure.bbox)
 
@@ -303,8 +312,6 @@ class CurveView(QWidget):
             return
         if self._near_threshold(event):
             self._drag_from = self.threshold_value()
-            self.threshold_line.set_animated(True)
-            self.canvas.draw()  # the saved background must not hold the line
             return
         coord = self.coord_at(event.x, event.y)
         if coord is not None:
@@ -345,7 +352,7 @@ class CurveView(QWidget):
     def set_theme(self, dark: bool) -> None:
         self.dark = bool(dark)
         self._apply_theme()
-        self._backgrounds = {}
+        self._background = None
         self.canvas.draw_idle()
 
     def _apply_theme(self) -> None:
@@ -362,4 +369,8 @@ class CurveView(QWidget):
         self.ax.grid(True, color=t["grid"], linewidth=0.5)
         self.ax.set_axisbelow(True)
         self._top.set_color(t["accent"])
+        self._veil.set_facecolor(t["bg"])
+        self._veil.set_edgecolor("none")
+        if self.threshold_line is not None:
+            self.threshold_line.set_color(t["text"])
         self.auto_button.setIcon(icon("rotate-ccw", t["dim"]))

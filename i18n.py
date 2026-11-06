@@ -137,7 +137,6 @@ def current_language() -> str:
 RU.update(
     {
         "ui.col.cq_calc": "Cq по кривой",
-        "ui.col.efficiency": "E",
         "ui.col.tm": "Tm",
         "ui.save_figure": "Сохранить рисунок…",
         "ui.filter_figure": "Рисунки (*.svg *.png *.pdf)",
@@ -161,7 +160,8 @@ RU.update(
 RU.update(
     {
         "start.title": "Перетащите файлы прибора сюда",
-        "start.note": "Можно сразу несколько файлов или папку: CFX, QuantStudio, Rotor-Gene, RDML, CSV",
+        "start.note": "Несколько файлов или папку: CFX, QuantStudio, Rotor-Gene, RDML, CSV",
+        "ui.role_keep": "Роль: без изменений",
         "start.add": "Выбрать файлы…",
         "start.open": "Открыть проект…",
         "start.demo": "Демо-данные",
@@ -255,7 +255,7 @@ RU.update(
         "ui.add_run": "Добавить запуск…", "ui.import_layout": "Импорт разметки…",
         "ui.wells_n": "{n} лунок",
         "ui.references": "Референсные гены", "ui.control_group": "Контрольная группа",
-        "ui.efficiency": "Эффективность", "ui.eff.stdcurve": "по кривой", "ui.eff.manual": "вручную", "ui.eff.ideal": "100 %",
+        "ui.efficiency": "Эффективность", "ui.eff.stdcurve": "по стандартам", "ui.eff.manual": "вручную", "ui.eff.ideal": "100 %",
         "ui.test": "Пост-хок тест", "ui.test.dunnett": "Даннет (против контроля)", "ui.test.tukey": "Тьюки (все пары)",
         "ui.thresholds": "Пороги QC",
         "ui.set.rep_sd_max": "SD реплик, макс.", "ui.set.ntc_cq_min": "Cq NTC, мин.", "ui.set.late_cq": "Поздний Cq",
