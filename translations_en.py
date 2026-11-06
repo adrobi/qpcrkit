@@ -53,6 +53,19 @@ EN: dict[str, str] = {
 
 EN.update(
     {
+        "ui.cq_source": "Cq source",
+        "ui.cq_source.instrument": "Instrument Cq",
+        "ui.cq_source.calculated": "Cq from curves",
+        "ui.eff.curves": "from amplification curves",
+        "ui.eff.from_curves": "from curves: {eff:.0%}",
+        "ui.set.nrt_min_delta": "No-RT control: cycles from the sample",
+        "ui.set.tm_shift_max": "Tm shift from the median, °C",
+        "ui.set.early_cq": "Early Cq, below",
+        "ui.set.cq_disagree_max": "Disagreement with instrument Cq, cycles",
+    }
+)
+EN.update(
+    {
         "start.title": "Drop instrument files here",
         "start.note": "Several files or a folder at once: CFX, QuantStudio, Rotor-Gene, RDML, CSV",
         "start.add": "Choose files…",

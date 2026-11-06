@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 from i18n import tr
 from qpcr_core.editing import update_settings
 from qpcr_core.models import Project
+from qpcr_core.pipeline import Results
 from ui.editor import ProjectEditor
 from ui.theme import DARK, LIGHT, icon
 
@@ -100,6 +101,8 @@ class SettingsPanel(QWidget):
         self._target_names: tuple[str, ...] | None = None
         self.eff_mode: dict[str, QComboBox] = {}
         self.eff_value: dict[str, QDoubleSpinBox] = {}
+        self.curve_eff_label: dict[str, QLabel] = {}
+        self._results: Results | None = None
         self.spins: dict[str, QDoubleSpinBox] = {}
 
         outer = QVBoxLayout(self)
@@ -112,6 +115,12 @@ class SettingsPanel(QWidget):
         self._form = QFormLayout(content)
         self._form.setContentsMargins(8, 8, 8, 8)
         scroll.setWidget(content)
+
+        self._add_title(tr("ui.cq_source"))
+        self.cq_source_combo = QComboBox()
+        self.cq_source_combo.addItem(tr("ui.cq_source.instrument"), "instrument")
+        self.cq_source_combo.addItem(tr("ui.cq_source.calculated"), "calculated")
+        self._form.addRow(self.cq_source_combo)
 
         self._add_title(tr("ui.efficiency"))
         self._eff_box = QWidget()
@@ -133,6 +142,10 @@ class SettingsPanel(QWidget):
             ("eff_min", 0.0, 2.0, 0.01, 2),
             ("eff_max", 0.0, 2.0, 0.01, 2),
             ("r2_min", 0.0, 1.0, 0.005, 3),
+            ("nrt_min_delta", 0.0, 30.0, 0.5, 1),
+            ("tm_shift_max", 0.0, 10.0, 0.1, 1),
+            ("early_cq", 0.0, 30.0, 0.5, 1),
+            ("cq_disagree_max", 0.0, 10.0, 0.1, 1),
         )
         for name, minimum, maximum, step, decimals in specs:
             spin = QDoubleSpinBox()
@@ -146,6 +159,7 @@ class SettingsPanel(QWidget):
         self._form.addRow(self.pool_check)
 
         self.test_combo.currentIndexChanged.connect(self._test_changed)
+        self.cq_source_combo.currentIndexChanged.connect(self._cq_source_changed)
         for name, spin in self.spins.items():
             spin.valueChanged.connect(lambda value, n=name: self._spin_changed(n, value))
         self.pool_check.toggled.connect(self._pool_toggled)
@@ -165,6 +179,10 @@ class SettingsPanel(QWidget):
             index = self.test_combo.findData(project.settings.test)
             self.test_combo.setCurrentIndex(index if index >= 0 else 0)
 
+        with QSignalBlocker(self.cq_source_combo):
+            index = self.cq_source_combo.findData(project.settings.cq_source)
+            self.cq_source_combo.setCurrentIndex(index if index >= 0 else 0)
+
         for name, spin in self.spins.items():
             with QSignalBlocker(spin):
                 spin.setValue(getattr(project.settings, name))
@@ -183,6 +201,21 @@ class SettingsPanel(QWidget):
                 value = target.efficiency_manual if target and target.efficiency_manual is not None else 1.0
                 spin.setValue(value)
                 spin.setEnabled(mode == "manual")
+        self._apply_results()
+
+    def set_results(self, results: Results | None) -> None:
+        """Kept, because a refresh may rebuild the rows of the targets."""
+        self._results = results
+        self._apply_results()
+
+    def _apply_results(self) -> None:
+        """What the curves say about each target; their mode needs an estimate, unless already chosen."""
+        known = self._results.curve_efficiency if self._results else {}
+        for name, combo in self.eff_mode.items():
+            value = known.get(name)
+            self.curve_eff_label[name].setText(tr("ui.eff.from_curves", eff=value) if value is not None else "")
+            item = combo.model().item(combo.findData("curves"))
+            item.setEnabled(value is not None or combo.currentData() == "curves")
 
     def _add_title(self, text: str) -> None:
         label = QLabel(text)
@@ -195,6 +228,7 @@ class SettingsPanel(QWidget):
         _clear_layout(self._eff_layout)
         self.eff_mode = {}
         self.eff_value = {}
+        self.curve_eff_label = {}
         for name in names:
             row = QWidget()
             row_layout = QHBoxLayout(row)
@@ -203,6 +237,7 @@ class SettingsPanel(QWidget):
 
             mode = QComboBox()
             mode.addItem(tr("ui.eff.stdcurve"), "stdcurve")
+            mode.addItem(tr("ui.eff.curves"), "curves")
             mode.addItem(tr("ui.eff.manual"), "manual")
             mode.addItem(tr("ui.eff.ideal"), "ideal")
             mode.currentIndexChanged.connect(lambda _index, n=name: self._eff_mode_changed(n))
@@ -216,9 +251,19 @@ class SettingsPanel(QWidget):
             value.valueChanged.connect(lambda v, n=name: self._eff_value_changed(n, v))
             row_layout.addWidget(value)
 
+            estimate = QLabel()
+            estimate.setObjectName("dim")
+            row_layout.addWidget(estimate)
+
             self._eff_layout.addWidget(row)
             self.eff_mode[name] = mode
             self.eff_value[name] = value
+            self.curve_eff_label[name] = estimate
+
+    def _cq_source_changed(self, _index: int) -> None:
+        value = self.cq_source_combo.currentData() or "instrument"
+        if value != self.editor.project.settings.cq_source:
+            self.editor.apply(update_settings, cq_source=value)
 
     def _test_changed(self, _index: int) -> None:
         value = self.test_combo.currentData() or "dunnett"

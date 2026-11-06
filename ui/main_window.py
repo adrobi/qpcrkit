@@ -149,6 +149,7 @@ class MainWindow(QMainWindow):
         if self.analysis is not None:
             self.analysis.dispose()
         self.analysis = AnalysisDialog(self.editor, self)
+        self.analysis.panel.set_results(self.results)
 
         self.pages = QStackedWidget()
         self._page_widgets = {
@@ -316,6 +317,7 @@ class MainWindow(QMainWindow):
         for tab in (self.std, self.expr, self.qc):
             tab.set_results(project, results, self.dark)
         self.curves.set_data(project, results, self.current_run_id)
+        self.analysis.panel.set_results(results)
         self.nav.set_qc_count(len(results.flags_by_severity("error")), len(results.flags_by_severity("warning")))
         if not project.runs:
             self.statusBar().showMessage(tr("ui.no_run"))

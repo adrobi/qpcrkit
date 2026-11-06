@@ -136,6 +136,19 @@ def current_language() -> str:
 
 RU.update(
     {
+        "ui.cq_source": "Источник Cq",
+        "ui.cq_source.instrument": "Cq прибора",
+        "ui.cq_source.calculated": "Cq по кривым",
+        "ui.eff.curves": "по кривым амплификации",
+        "ui.eff.from_curves": "по кривым: {eff:.0%}",
+        "ui.set.nrt_min_delta": "Контроль без ОТ: разница с образцом, циклов",
+        "ui.set.tm_shift_max": "Сдвиг Tm от медианы, °C",
+        "ui.set.early_cq": "Ранний Cq, меньше",
+        "ui.set.cq_disagree_max": "Расхождение с Cq прибора, циклов",
+    }
+)
+RU.update(
+    {
         "start.title": "Перетащите файлы прибора сюда",
         "start.note": "Можно сразу несколько файлов или папку: CFX, QuantStudio, Rotor-Gene, RDML, CSV",
         "start.add": "Выбрать файлы…",
