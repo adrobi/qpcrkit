@@ -91,3 +91,90 @@ def test_curves_lists_become_tuples_and_old_sessions_open():
     assert project_from_dict(d) == p
     rxn["melt_derivative"] = {"x": [60.0], "y": [1.0]}
     assert project_from_dict(d).runs[0].wells["A1"].reactions[0].melt_derivative == Curve((60.0,), (1.0,))
+
+
+# --- compact files ---
+
+
+def _wendy():
+    from pathlib import Path
+
+    from qpcr_core.importers.detect import import_files
+    from qpcr_core.models import Project
+
+    real = Path(__file__).parent / "data" / "real"
+    report = import_files(sorted(real.glob("2016-09-04*")), 1)[0]
+    p = Project(runs=[report.run])
+    p.ensure_targets_and_samples()
+    return p
+
+
+def test_curves_share_one_axis_in_the_file():
+    d = project_to_dict(_wendy())["runs"][0]
+    assert 1 <= len(d["curve_axes"]) <= 3
+    first = next(iter(d["wells"].values()))["reactions"][0]["amplification"]
+    assert "x" not in first and first["x_ref"] < len(d["curve_axes"])
+
+
+def test_project_file_with_curves_is_small(tmp_path):
+    path = tmp_path / "w.qpcrkit.json"
+    save_project(_wendy(), path)
+    assert path.stat().st_size < 350_000
+
+
+def test_round_trip_keeps_the_analysis(tmp_path):
+    from qpcr_core.pipeline import analyze
+
+    p = _wendy()
+    path = tmp_path / "w.qpcrkit.json"
+    save_project(p, path)
+    q = load_project(path)
+    before, after = analyze(p).curves, analyze(q).curves
+    assert before.keys() == after.keys()
+    for key, r in before.items():
+        assert after[key].cq_calc == pytest.approx(r.cq_calc, abs=1e-3)
+    a, b = p.runs[0].wells["A1"].reactions[0].amplification, q.runs[0].wells["A1"].reactions[0].amplification
+    assert b.x == a.x
+    assert b.y == pytest.approx(a.y, rel=1e-6)
+
+
+def test_loaded_curves_share_their_axis(tmp_path):
+    path = tmp_path / "w.qpcrkit.json"
+    save_project(_wendy(), path)
+    wells = load_project(path).runs[0].wells
+    assert wells["A1"].reactions[0].amplification.x is wells["A2"].reactions[0].amplification.x
+
+
+def test_undo_redo_then_save_and_load(tmp_path):
+    from qpcr_core.editing import EditHistory, set_excluded
+
+    p = _wendy()
+    curve = p.runs[0].wells["A1"].reactions[0].amplification
+    history = EditHistory()
+    history.record(p)
+    set_excluded(p, p.runs[0].id, "A1", None, True, "test")
+    undone = history.undo(p)
+    assert not undone.runs[0].wells["A1"].reactions[0].excluded
+    assert undone.runs[0].wells["A1"].reactions[0].amplification is curve  # snapshots share the curves
+    redone = history.redo(undone)
+    assert redone.runs[0].wells["A1"].reactions[0].amplification is curve
+    path = tmp_path / "w.qpcrkit.json"
+    save_project(redone, path)
+    assert load_project(path).runs[0].wells["A1"].reactions[0].excluded
+
+
+def test_old_file_with_curves_in_full_opens():
+    p = _project()
+    d = project_to_dict(p)
+    run = d["runs"][0]
+    axes = run.pop("curve_axes")
+    rxn = run["wells"]["A1"]["reactions"][0]
+    rxn["amplification"] = {"x": axes[rxn["amplification"]["x_ref"]], "y": rxn["amplification"]["y"]}
+    assert project_from_dict(d).runs[0].wells["A1"].reactions[0].amplification == Curve([1.0, 2.0], [0.1, 0.2])
+
+
+def test_file_of_1_0_without_curves_opens():
+    d = {"runs": [{"id": "R", "name": "R", "wells": {"A1": {"coord": "A1", "reactions": [{"target": "T", "cq": 20.0}]}}}]}
+    q = project_from_dict(d)
+    assert q.runs[0].thresholds == {}
+    assert q.settings.cq_source == "instrument"

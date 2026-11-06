@@ -38,8 +38,8 @@ def std_curve_figure(curve: StdCurve, style: dict | None = None) -> Figure:
     with matplotlib.rc_context(style or {}):
         fig = Figure(layout="constrained")
         ax = fig.add_subplot()
-        qs = [q for q, _ in curve.points]
-        ax.scatter(qs, [cq for _, cq in curve.points], s=18, color=BAR_COLOR, zorder=3)
+        qs = [p.quantity for p in curve.points]
+        ax.scatter(qs, [p.cq for p in curve.points], s=18, color=BAR_COLOR, zorder=3)
         lo, hi = min(qs), max(qs)
         ax.plot([lo, hi], [curve.slope * math.log10(q) + curve.intercept for q in (lo, hi)], color="0.3", lw=1)
         ax.set_xscale("log")

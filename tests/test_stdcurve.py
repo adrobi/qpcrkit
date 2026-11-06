@@ -91,3 +91,13 @@ def test_standard_without_quantity_flagged():
     rows = _ideal_rows() + [("R1", "C2", None, "IL6", "std", 30.0, None)]
     _, flags = fit_std_curves(make_project(rows), raw_cq)
     assert [(f.code, f.severity, f.target, f.coords) for f in flags] == [("std_no_quantity", "warning", "IL6", ("C2",))]
+
+
+def test_points_know_their_wells():
+    p = make_project(
+        [("R1", f"A{i + 1}", None, "T", "std", 30.0 - 3.32 * i, 10.0 ** (i + 1)) for i in range(3)]
+        + [("R2", "B1", None, "T", "std", 20.0, 1000.0)]
+    )
+    points = fit_std_curves(p, raw_cq)[0][(None, "T")].points
+    assert points[0] == (10.0, 30.0, "R1", "A1")
+    assert {(q.run_id, q.coord) for q in points} == {("R1", "A1"), ("R1", "A2"), ("R1", "A3"), ("R2", "B1")}

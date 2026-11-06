@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import NamedTuple
 
 import numpy as np
 
@@ -12,6 +13,13 @@ from .flags import Flag
 from .models import Project, Reaction, Run, Well
 
 CqFn = Callable[[Run, Well, Reaction], "float | None"]
+
+
+class StdPoint(NamedTuple):
+    quantity: float
+    cq: float
+    run_id: str
+    coord: str
 
 
 @dataclass
@@ -27,13 +35,13 @@ class StdCurve:
     min_q: float
     max_q: float
     lowest_detected: float | None
-    points: list[tuple[float, float]]  # (quantity, cq)
+    points: list[StdPoint]
 
 
 def fit_std_curves(project: Project, cq_of: CqFn) -> tuple[dict[tuple[str | None, str], StdCurve], list[Flag]]:
     s = project.settings
-    # key -> quantity -> list of cq (None = no amplification)
-    data: dict[tuple[str | None, str], dict[float, list[float | None]]] = defaultdict(lambda: defaultdict(list))
+    # key -> quantity -> list of (cq or None = no amplification, run, well)
+    data: dict[tuple[str | None, str], dict[float, list[tuple[float | None, str, str]]]] = defaultdict(lambda: defaultdict(list))
     no_quantity: dict[tuple[str, str], list[str]] = defaultdict(list)
     for run, well, rxn in project.iter_reactions():
         if rxn.role != "std" or rxn.excluded:
@@ -42,7 +50,7 @@ def fit_std_curves(project: Project, cq_of: CqFn) -> tuple[dict[tuple[str | None
             no_quantity[(run.id, rxn.target)].append(well.coord)
             continue
         key = (None if s.pool_std_runs else run.id, rxn.target)
-        data[key][rxn.quantity].append(cq_of(run, well, rxn))
+        data[key][rxn.quantity].append((cq_of(run, well, rxn), run.id, well.coord))
 
     curves: dict[tuple[str | None, str], StdCurve] = {}
     flags = [
@@ -51,17 +59,17 @@ def fit_std_curves(project: Project, cq_of: CqFn) -> tuple[dict[tuple[str | None
     ]
     for key, levels in data.items():
         run_id, target = key
-        points = [(q, cq) for q, cqs in levels.items() for cq in cqs if cq is not None]
-        n_levels = len({q for q, _ in points})
+        points = [StdPoint(q, cq, r, c) for q, cqs in levels.items() for cq, r, c in cqs if cq is not None]
+        n_levels = len({p.quantity for p in points})
         if n_levels < 3:
             flags.append(Flag("warning", "std_levels_few", {"levels": n_levels}, run_id, target=target))
             continue
-        x = np.log10([q for q, _ in points])
-        y = np.array([cq for _, cq in points])
+        x = np.log10([p.quantity for p in points])
+        y = np.array([p.cq for p in points])
         slope, intercept = np.polyfit(x, y, 1)
         r2 = float(np.corrcoef(x, y)[0, 1] ** 2)
         eff = 10 ** (-1 / slope) - 1
-        complete = [q for q, cqs in levels.items() if cqs and all(c is not None for c in cqs)]
+        complete = [q for q, cqs in levels.items() if cqs and all(c[0] is not None for c in cqs)]
         curves[key] = StdCurve(
             target=target,
             run_id=run_id,
@@ -71,8 +79,8 @@ def fit_std_curves(project: Project, cq_of: CqFn) -> tuple[dict[tuple[str | None
             efficiency=float(eff),
             n_points=len(points),
             n_levels=n_levels,
-            min_q=min(q for q, _ in points),
-            max_q=max(q for q, _ in points),
+            min_q=min(p.quantity for p in points),
+            max_q=max(p.quantity for p in points),
             lowest_detected=min(complete) if complete else None,
             points=sorted(points),
         )
