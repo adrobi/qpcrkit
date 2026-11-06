@@ -14,7 +14,7 @@ def _editor():
 
 
 def test_columns():
-    assert COLUMNS == ("run", "well", "sample", "group", "target", "role", "cq", "quantity", "excluded")
+    assert COLUMNS[:9] == ("run", "well", "sample", "group", "target", "role", "cq", "quantity", "excluded")
 
 
 def test_row_count(qapp):

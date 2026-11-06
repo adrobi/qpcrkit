@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
@@ -53,6 +54,8 @@ def _table(widget: QTableWidget, headers: list[str], rows: list[list[object]]) -
 
 class StdCurveTab(QWidget):
     """Standard-curve figure and table."""
+
+    point_clicked = Signal(str, str, str)  # run, well, target
 
     def __init__(self) -> None:
         super().__init__()
@@ -141,10 +144,18 @@ class StdCurveTab(QWidget):
             return
         curve = self._curves[index][1]
         self._canvas.set_figure(std_curve_figure(curve, style=mpl_style(self._dark)))  # type: ignore[arg-type]
+        self._canvas.mpl_canvas.mpl_connect("pick_event", self._on_pick)
+
+    def _on_pick(self, event) -> None:
+        curve = self._curves[self._combo.currentIndex()][1]
+        point = curve.points[int(event.ind[0])]
+        self.point_clicked.emit(point.run_id, point.coord, curve.target)
 
 
 class ExpressionTab(QWidget):
     """Relative-expression figure and tables."""
+
+    save_requested = Signal(str)  # target
 
     def __init__(self, editor: ProjectEditor) -> None:
         super().__init__()
@@ -176,6 +187,10 @@ class ExpressionTab(QWidget):
         self._log2_check.toggled.connect(self.set_log2)
         controls.addWidget(self._log2_check)
         controls.addStretch(1)
+        self.save_button = QPushButton(tr("ui.save_figure"))
+        self.save_button.setEnabled(False)
+        self.save_button.clicked.connect(lambda: self.save_requested.emit(self._target))
+        controls.addWidget(self.save_button)
         layout.addLayout(controls)
 
         self._canvas = FigureCanvas(tr("ui.no_groups"))
@@ -211,7 +226,12 @@ class ExpressionTab(QWidget):
         blocker.unblock()
 
         self._set_error_combo(self._project_error_bar(project))
+        self.save_button.setEnabled(bool(self._target))
         self._redraw()
+
+    @property
+    def log2(self) -> bool:
+        return self._log2
 
     def set_error_bar(self, kind: str) -> None:
         """Select the error-bar kind and persist the setting when needed."""

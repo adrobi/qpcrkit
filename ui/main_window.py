@@ -40,7 +40,7 @@ from qpcr_core.editing import (
     update_settings,
 )
 from qpcr_core.export import export_csv, export_html, export_xlsx
-from qpcr_core.figures import expression_figure, safe_name, save_figure, std_curve_figure
+from qpcr_core.figures import amplification_figure, expression_figure, melt_figure, safe_name, save_figure, std_curve_figure
 from qpcr_core.hints import next_hint
 from qpcr_core.importers.base import UnknownFormatError, UnsupportedFileError, add_report
 from qpcr_core.importers.detect import import_files
@@ -109,6 +109,7 @@ class MainWindow(QMainWindow):
         self.current_run_id: str | None = None
         self.dark = False
         self.last_import_note = ""
+        self._one_time_note = ""
         self._timer = QTimer(self, singleShot=True, interval=RECALC_DELAY_MS)
         self._timer.timeout.connect(self.recalculate_now)
         self.analysis: AnalysisDialog | None = None
@@ -143,7 +144,9 @@ class MainWindow(QMainWindow):
         self.curves.threshold_reset.connect(lambda target: self._set_threshold(target, None))
         self.data = DataTable(self.editor)
         self.std = StdCurveTab()
+        self.std.point_clicked.connect(self._exclude_std_point)
         self.expr = ExpressionTab(self.editor)
+        self.expr.save_requested.connect(self._save_expression_figure)
         self.qc = QcTab()
         self.qc.locate.connect(self.locate)
         if self.analysis is not None:
@@ -318,6 +321,7 @@ class MainWindow(QMainWindow):
             tab.set_results(project, results, self.dark)
         self.curves.set_data(project, results, self.current_run_id)
         self.analysis.panel.set_results(results)
+        self.data.model.set_results(results)
         self.nav.set_qc_count(len(results.flags_by_severity("error")), len(results.flags_by_severity("warning")))
         if not project.runs:
             self.statusBar().showMessage(tr("ui.no_run"))
@@ -328,7 +332,8 @@ class MainWindow(QMainWindow):
                 errors=len(results.flags_by_severity("error")),
                 warnings=len(results.flags_by_severity("warning")),
             )
-            self.statusBar().showMessage(" · ".join(x for x in (status, self.last_import_note) if x))
+            self.statusBar().showMessage(" · ".join(x for x in (status, self.last_import_note, self._one_time_note) if x))
+            self._one_time_note = ""
 
     def select_run(self, run_id: str) -> None:
         self.current_run_id = run_id
@@ -367,6 +372,22 @@ class MainWindow(QMainWindow):
         """At once, not after the usual delay: the line must not jump back meanwhile."""
         self.editor.apply(set_threshold, self.current_run_id, target, value)
         self.recalculate_now()
+
+    def _exclude_std_point(self, run_id: str, coord: str, target: str) -> None:
+        self.editor.apply(set_excluded, run_id, coord, target, True, tr("ui.excluded_on_curve"))
+        self._one_time_note = tr("ui.excluded_note", coord=coord, target=target)
+        self.statusBar().showMessage(self._one_time_note)
+
+    def _save_expression_figure(self, target: str) -> None:
+        """A new figure without the screen style: the file is white in any theme."""
+        path = self._ask_save_path(tr("ui.filter_figure"), f"expression_{safe_name(target)}.svg")
+        if not path:
+            return
+        fig = expression_figure(self.results, target, error=self.editor.project.settings.error_bar, log2=self.expr.log2)
+        try:
+            save_figure(fig, path)
+        except (OSError, ValueError) as exc:
+            self._show_error(tr("ui.export_failed", error=exc))
 
     def _on_wells_clicked(self, coords: list[str], add: bool) -> None:
         if add:
@@ -609,6 +630,12 @@ class MainWindow(QMainWindow):
                     save_figure(fig, out / f"expression_{safe_name(target)}.svg")
                 for (run_id, target), curve in results.std_curves.items():
                     save_figure(std_curve_figure(curve), out / f"stdcurve_{safe_name(target)}_{run_id or 'pooled'}.svg")
+                for run in project.runs:
+                    rxns = [r for w in run.wells.values() for r in w.reactions if not r.excluded]
+                    if any(r.amplification is not None for r in rxns):
+                        save_figure(amplification_figure(project, results, run.id), out / f"amplification_{safe_name(run.id)}.svg")
+                    if any(r.melt is not None or r.melt_derivative is not None for r in rxns):
+                        save_figure(melt_figure(project, results, run.id), out / f"melt_{safe_name(run.id)}.svg")
             else:
                 raise ValueError(kind)
         except OSError as exc:

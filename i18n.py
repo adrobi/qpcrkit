@@ -136,6 +136,17 @@ def current_language() -> str:
 
 RU.update(
     {
+        "ui.col.cq_calc": "Cq по кривой",
+        "ui.col.efficiency": "E",
+        "ui.col.tm": "Tm",
+        "ui.save_figure": "Сохранить рисунок…",
+        "ui.filter_figure": "Рисунки (*.svg *.png *.pdf)",
+        "ui.excluded_on_curve": "исключена на стандартной кривой",
+        "ui.excluded_note": "Реплика {coord} ({target}) исключена. Отменить: Ctrl+Z",
+    }
+)
+RU.update(
+    {
         "ui.cq_source": "Источник Cq",
         "ui.cq_source.instrument": "Cq прибора",
         "ui.cq_source.calculated": "Cq по кривым",

@@ -35,9 +35,10 @@ from qpcr_core.editing import (
 )
 from qpcr_core.importers.textio import parse_number
 from qpcr_core.models import ROLES, parse_coord
+from qpcr_core.pipeline import Results
 from ui.editor import ProjectEditor
 
-COLUMNS = ("run", "well", "sample", "group", "target", "role", "cq", "quantity", "excluded")
+COLUMNS = ("run", "well", "sample", "group", "target", "role", "cq", "quantity", "excluded", "cq_calc", "efficiency", "tm")
 _COL = {name: index for index, name in enumerate(COLUMNS)}
 SORT_ROLE = Qt.ItemDataRole.UserRole
 _FILTER_COLUMNS = (_COL["run"], _COL["well"], _COL["sample"], _COL["target"])
@@ -107,6 +108,7 @@ class ReactionModel(QAbstractTableModel):
     def __init__(self, editor: ProjectEditor, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self.editor = editor
+        self._results: Results | None = None
         self._rows: list[tuple[str, str, int]] = []
         self._edits = {
             "sample": self._edit_sample,
@@ -126,6 +128,20 @@ class ReactionModel(QAbstractTableModel):
             for reaction_index in range(len(well.reactions))
         ]
         self.endResetModel()
+
+    def set_results(self, results: Results | None) -> None:
+        self._results = results
+        if self._rows:
+            first = len(COLUMNS) - 3
+            self.dataChanged.emit(self.index(0, first), self.index(len(self._rows) - 1, len(COLUMNS) - 1))
+
+    def _curve_value(self, run, well, reaction, column: str) -> float | None:
+        result = self._results.curves.get((run.id, well.coord, reaction.target, reaction.fluor)) if self._results else None
+        if result is None:
+            return None
+        if column == "tm":
+            return result.tms[0] if result.tms else None
+        return result.cq_calc if column == "cq_calc" else result.efficiency
 
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
         return 0 if parent.isValid() else len(self._rows)
@@ -177,8 +193,16 @@ class ReactionModel(QAbstractTableModel):
         if role == SORT_ROLE and column in ("cq", "quantity"):
             value = getattr(reaction, column)
             return float("inf") if value is None else value
+        if column in ("cq_calc", "efficiency", "tm") and role == SORT_ROLE:
+            value = self._curve_value(run, well, reaction, column)
+            return float("inf") if value is None else float(value)
         if role not in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole, SORT_ROLE):
             return None
+        if column in ("cq_calc", "efficiency", "tm"):
+            value = self._curve_value(run, well, reaction, column)
+            if value is None:
+                return "—" if column == "cq_calc" else ""
+            return {"cq_calc": f"{value:.2f}", "efficiency": f"{value:.1%}", "tm": f"{value:.1f}"}[column]
 
         if column == "run":
             return run.id

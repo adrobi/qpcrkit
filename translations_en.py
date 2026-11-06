@@ -53,6 +53,17 @@ EN: dict[str, str] = {
 
 EN.update(
     {
+        "ui.col.cq_calc": "Cq from curve",
+        "ui.col.efficiency": "E",
+        "ui.col.tm": "Tm",
+        "ui.save_figure": "Save figure…",
+        "ui.filter_figure": "Figures (*.svg *.png *.pdf)",
+        "ui.excluded_on_curve": "excluded on the standard curve",
+        "ui.excluded_note": "Replicate {coord} ({target}) excluded. Undo: Ctrl+Z",
+    }
+)
+EN.update(
+    {
         "ui.cq_source": "Cq source",
         "ui.cq_source.instrument": "Instrument Cq",
         "ui.cq_source.calculated": "Cq from curves",

@@ -40,6 +40,11 @@ def significance_stars(p: float | None) -> str:
     return ""
 
 
+def _ink(style: dict | None, default: str) -> str:
+    """Lines and dots on a dark background take the text color; exports keep the grays."""
+    return (style or {}).get("text.color", default)
+
+
 def _curve_axes(fig: Figure, by_target: dict[str, list[Curve]], log: bool = False):
     """All curves in one collection per target: hundreds of separate lines would be slow to draw."""
     ax = fig.add_subplot()
@@ -119,9 +124,9 @@ def std_curve_figure(curve: StdCurve, style: dict | None = None) -> Figure:
         fig = Figure(layout="constrained")
         ax = fig.add_subplot()
         qs = [p.quantity for p in curve.points]
-        ax.scatter(qs, [p.cq for p in curve.points], s=18, color=BAR_COLOR, zorder=3)
+        ax.scatter(qs, [p.cq for p in curve.points], s=18, color=BAR_COLOR, zorder=3, picker=True, pickradius=5)
         lo, hi = min(qs), max(qs)
-        ax.plot([lo, hi], [curve.slope * math.log10(q) + curve.intercept for q in (lo, hi)], color="0.3", lw=1)
+        ax.plot([lo, hi], [curve.slope * math.log10(q) + curve.intercept for q in (lo, hi)], color=_ink(style, "0.3"), lw=1)
         ax.set_xscale("log")
         ax.set_xlabel("Quantity")
         ax.set_ylabel("Cq")
@@ -160,13 +165,13 @@ def expression_figure(
             bounds = [g.fold_bounds(error) for g in groups]
             yerr = [[h - lo for h, (lo, _) in zip(heights, bounds)], [hi - h for h, (_, hi) in zip(heights, bounds)]]
         ax.bar(xs, heights, color=BAR_COLOR, alpha=0.75, width=0.6)
-        ax.errorbar(xs, heights, yerr=yerr, fmt="none", ecolor="0.2", capsize=4, lw=1)
+        ax.errorbar(xs, heights, yerr=yerr, fmt="none", ecolor=_ink(style, "0.2"), capsize=4, lw=1)
 
         for x, name in zip(xs, names):
             pts = [r.log2_rq if log2 else r.rq for r in results.rqs if r.target == target and r.group == name]
             n = len(pts)
             jitter = [(i - (n - 1) / 2) * 0.08 for i in range(n)]
-            ax.scatter([x + j for j in jitter], pts, s=14, color="0.15", zorder=3)
+            ax.scatter([x + j for j in jitter], pts, s=14, color=_ink(style, "0.15"), zorder=3)
 
         tops = []
         for x, name, h, e in zip(xs, names, heights, yerr[1]):
@@ -183,7 +188,7 @@ def expression_figure(
         ax.set_xticks(list(xs), names)
         ax.set_ylabel(f"log2 fold change ({target})" if log2 else f"Fold change ({target})")
         if log2:
-            ax.axhline(0, color="0.5", lw=0.8)
+            ax.axhline(0, color=_ink(style, "0.5"), lw=0.8)
         ax.set_title(target)
     return fig
 

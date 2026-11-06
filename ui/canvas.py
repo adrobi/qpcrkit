@@ -19,6 +19,10 @@ class FigureCanvas(QWidget):
         self._layout.addWidget(self._placeholder)
         self._canvas: FigureCanvasQTAgg | None = None
 
+    @property
+    def mpl_canvas(self) -> FigureCanvasQTAgg | None:
+        return self._canvas
+
     def set_placeholder(self, text: str) -> None:
         self._placeholder.setText(text)
 
