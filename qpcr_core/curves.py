@@ -88,6 +88,8 @@ def _baseline_window(curve: Curve) -> tuple[int, int]:
         if y[end - 1] <= y[end - 3] or (y[end - 2 : end] - np.polyval(line, x[end - 2 : end])).min() <= limit:
             break  # not rising here, or back on the line
         end -= 1
+    else:
+        return _SKIP, _SKIP + 2  # still rising at the shortest line: the growth starts inside the first cycles
     end = max(end - 2, _SKIP + _MIN_LINE_POINTS)  # the signal is about as large as the noise where the check stops
     return _trim_decay(x, y, end, limit), end
 

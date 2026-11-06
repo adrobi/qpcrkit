@@ -309,3 +309,9 @@ def test_derivative_keeps_the_axis():
     assert d.x == c.x
     assert len(d.y) == len(c.y)
     assert max(d.y) == pytest.approx(1.02, abs=0.1)  # falling signal gives a positive peak
+
+
+def test_cq_near_ten_is_not_pushed_later_by_its_own_exponent():
+    """Real QuantStudio wells with Cq about 10: cycles 3-8 already hold the start of the growth."""
+    out = cv.subtract_baseline(logistic(10.0, plateau=2.0, threshold=0.06, drift=0.001))
+    assert cv.cq_at(out, 0.06) == pytest.approx(10.0, abs=0.15)
