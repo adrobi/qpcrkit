@@ -94,6 +94,8 @@ def rename_target_in_run(project: Project, run_id: str, old: str, new: str) -> N
         for r in well.reactions:
             if r.target == old:
                 r.target = new
+    if old in run.thresholds:
+        run.thresholds.setdefault(new, run.thresholds[old])
     source = project.targets.get(old)
     if new not in project.targets:
         project.targets[new] = dataclasses.replace(source, name=new) if source else Target(new)
@@ -144,7 +146,7 @@ def clone_project(p: Project) -> Project:
     r = dataclasses.replace
     return Project(
         runs=[
-            r(run, wells={c: r(w, reactions=[r(x) for x in w.reactions]) for c, w in run.wells.items()})
+            r(run, thresholds=dict(run.thresholds), wells={c: r(w, reactions=[r(x) for x in w.reactions]) for c, w in run.wells.items()})
             for run in p.runs
         ],
         targets={k: r(v) for k, v in p.targets.items()},

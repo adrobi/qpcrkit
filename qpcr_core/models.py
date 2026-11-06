@@ -152,6 +152,9 @@ class Project:
         """
         used_targets = {r.target for _, _, r in self.iter_reactions()}
         self.targets = {k: v for k, v in self.targets.items() if k in used_targets}
+        for run in self.runs:
+            used_here = {r.target for w in run.wells.values() for r in w.reactions}
+            run.thresholds = {k: v for k, v in run.thresholds.items() if k in used_here}
         used_samples = {w.sample for run in self.runs for w in run.wells.values()}
         self.samples = {
             k: v

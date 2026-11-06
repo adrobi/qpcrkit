@@ -41,7 +41,10 @@ def clean(curve: Curve | None) -> Curve | None:
         return None
     x, y = x[keep], y[keep]
     order = np.argsort(x, kind="stable")
-    return Curve(x[order].tolist(), y[order].tolist())
+    x, y = x[order], y[order]
+    if (np.diff(x) <= 0).any():  # two values for one cycle or temperature: nothing tells which is right
+        return None
+    return Curve(x.tolist(), y.tolist())
 
 
 def _point_noise(y: np.ndarray) -> float:
@@ -254,7 +257,9 @@ def melt_noise(derivative: Curve) -> float:
     """SD around a wide running median: peaks and a sloping background do not count as noise."""
     x, y = np.asarray(derivative.x, dtype=float), np.asarray(derivative.y, dtype=float)
     size = int(round(_MELT_NOISE_WINDOW_C / float(np.median(np.diff(x))))) | 1
-    return 1.4826 * _mad(y - median_filter(y, size=size, mode="nearest"))
+    size = min(max(size, 3), y.size if y.size % 2 else y.size - 1)
+    noise = 1.4826 * _mad(y - median_filter(y, size=size, mode="nearest"))
+    return max(noise, _MIN_SIGNAL, 1e-9 * float(np.ptp(y)))  # a noiseless curve still has rounding ripples
 
 
 def melt_peaks(derivative: Curve, min_height: float) -> list[float]:
@@ -315,7 +320,7 @@ def _amplification_view(curve: Curve, already_subtracted: bool) -> tuple[Curve, 
 def _melt_view(curve: Curve, ready_derivative: bool) -> tuple[Curve, float] | None:
     """-dF/dT and its noise."""
     usable = clean(curve)
-    if usable is None or len(set(usable.x)) < len(usable.x):
+    if usable is None:
         return None
     try:
         derivative = usable if ready_derivative else melt_derivative(usable)
@@ -349,6 +354,9 @@ def analyze_curves(project: Project) -> tuple[dict[CurveKey, CurveResult], list[
     by_target: dict[tuple[str, str], list[Curve]] = defaultdict(list)
     unusable: dict[str, list[str]] = defaultdict(list)
     for run, well, rxn in project.iter_reactions():
+        has_melt = rxn.melt is not None or rxn.melt_derivative is not None
+        if has_melt and _melt_of(rxn) is None:
+            unusable[run.id].append(well.coord)
         if rxn.amplification is None:
             continue
         view = views[(run.id, well.coord, rxn.target, rxn.fluor)] = _amplification_view(rxn.amplification, rxn.baseline_subtracted)
@@ -373,12 +381,13 @@ def analyze_curves(project: Project) -> tuple[dict[CurveKey, CurveResult], list[
     results: dict[CurveKey, CurveResult] = {}
     for run, well, rxn in project.iter_reactions():
         melt = _melt_of(rxn)
-        if rxn.amplification is None and melt is None:
+        if rxn.amplification is None and rxn.melt is None and rxn.melt_derivative is None:
             continue
         key = (run.id, well.coord, rxn.target, rxn.fluor)
         view = views.get(key)
         group = (run.instrument, rxn.target)
-        threshold = run.thresholds.get(rxn.target) or thresholds.get(group)
+        manual = run.thresholds.get(rxn.target)
+        threshold = manual if manual is not None and manual > 0 else thresholds.get(group)
         cq = e = r2 = None
         if view is not None and view[1]:
             cq = cq_at(view[0], threshold) if threshold else None
@@ -392,7 +401,10 @@ def analyze_curves(project: Project) -> tuple[dict[CurveKey, CurveResult], list[
             floor = 0.1 * float(np.median(heights)) if heights else 0.0
             tms = tuple(melt_peaks(melt[0], max(MELT_NOISE_FACTOR * melt[1], floor)))
         results[key] = CurveResult(cq, e, r2, tms, threshold, rxn.baseline_subtracted)
-    flags = [Flag("warning", "curve_unusable", {"count": len(c)}, run_id, tuple(c)) for run_id, c in unusable.items()]
+    flags = [
+        Flag("warning", "curve_unusable", {"count": len(set(c))}, run_id, tuple(dict.fromkeys(c)))
+        for run_id, c in unusable.items()
+    ]
     return results, flags
 
 
@@ -416,20 +428,25 @@ def source_flags(project: Project, results: dict[CurveKey, CurveResult], factors
         calculated = run_uses_calculated(run, project.settings)
         without = []
         with_curve = False
+        compared: set[str] = set()  # an NTC or an excluded reaction takes no part in any comparison
         for well in run.wells.values():
             for rxn in well.reactions:
-                sources[rxn.target].add(calculated)
                 if rxn.excluded:
                     continue
                 result = results.get((run.id, well.coord, rxn.target, rxn.fluor))
-                if calculated and result is not None and result.threshold is not None:
-                    thresholds[rxn.target].add(result.threshold)
+                if rxn.role != "ntc":
+                    compared.add(rxn.target)
+                    if calculated and result is not None and result.threshold is not None:
+                        thresholds[rxn.target].add(result.threshold)
                 if rxn.amplification is None:
                     without.append(well.coord)
                 else:
                     with_curve = True
         if calculated and without and (with_curve or project.settings.cq_source == "calculated"):
             flags.append(Flag("warning", "no_curve_for_calculated", {"count": len(without)}, run.id, tuple(without)))
+        if not calculated or with_curve:  # a plate with neither Cq nor curves gives no Cq to mix
+            for target in compared:
+                sources[target].add(calculated)
     for target, kinds in sources.items():
         if len(kinds) > 1:
             severity = "warning" if any(k[1] == target for k in factors) else "error"

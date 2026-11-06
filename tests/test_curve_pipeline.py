@@ -433,3 +433,91 @@ def test_second_analysis_does_not_redo_the_baselines():
     after = cv._amplification_view.cache_info()
     assert after.misses == before.misses
     assert after.hits - before.hits >= 768
+
+
+# --- final review ---
+
+
+@pytest.mark.parametrize("bad", [0.0, -0.1])
+def test_non_positive_manual_threshold_is_ignored(bad):
+    p = _project(_plate())
+    p.runs[0].thresholds["T"] = bad
+    r = analyze(p).curves[_key("R1", "A1")]
+    assert r.threshold > 0 and r.cq_calc is not None
+
+
+def test_repeated_cycles_make_a_curve_unusable():
+    rows = _plate()
+    rows.append(("R1", "B1", "s9", "T", "unknown", None, Curve([1.0] * 40, list(logistic(25).y))))
+    res = analyze(_project(rows))
+    assert res.curves[_key("R1", "B1")].cq_calc is None
+    assert next(f for f in res.flags if f.code == "curve_unusable").coords == ("B1",)
+
+
+def test_clean_rejects_repeated_x():
+    assert cv.clean(Curve([1, 2, 2, 3, 4, 5], [1.0] * 6)) is None
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        Curve([70, 75, 80], [3.0, 2.0, 1.0]),
+        Curve([70, 70, 70, 70, 75, 80], [5.0, 5.0, 4.0, 3.0, 2.0, 1.0]),
+    ],
+)
+def test_broken_melt_is_flagged(broken):
+    p = _project([("R1", "A1", "s", "T", "unknown", 22.0, None, broken)])
+    assert next(f for f in analyze(p).flags if f.code == "curve_unusable").coords == ("A1",)
+
+
+def test_broken_melt_and_broken_curve_name_the_well_once():
+    bad = Curve([1, 2, 3], [1.0, 2.0, 3.0])
+    p = _project([("R1", "A1", "s", "T", "unknown", 22.0, bad, bad)])
+    assert next(f for f in analyze(p).flags if f.code == "curve_unusable").coords == ("A1",)
+
+
+def test_noiseless_flat_melt_has_no_peaks_from_rounding():
+    p = _project([("R1", "A1", "s", "T", "unknown", None, None, melt(height=0.0))])
+    assert analyze(p).curves[_key("R1", "A1")].tms == ()
+
+
+@pytest.mark.parametrize(
+    "c",
+    [
+        Curve([65.0, 65.0001, 65.0002, 65.0003, 95.0], [5.0, 4.9, 4.8, 4.7, 1.0]),
+        Curve([40.0, 60.0, 80.0, 100.0, 120.0, 140.0], [5.0, 4.9, 2.0, 1.0, 0.9, 0.8]),
+    ],
+)
+def test_melt_with_an_odd_step_does_not_fall(c):
+    p = _project([("R1", "A1", "s", "T", "unknown", None, None, c)])
+    assert isinstance(analyze(p).curves[_key("R1", "A1")].tms, tuple)
+
+
+def _undetermined_plate(run: str):
+    return [(run, f"A{i}", f"s{i}", "T", "unknown", None, None) for i in range(1, 4)]
+
+
+def _instrument_plate(run: str):
+    return [(run, f"A{i}", f"s{i}", "T", "unknown", 22.0, None) for i in range(1, 4)]
+
+
+def test_plate_of_undetermined_without_curves_is_not_a_mix():
+    p = _project(_instrument_plate("R1") + _undetermined_plate("R2"))
+    assert "mixed_cq_sources" not in _codes(analyze(p))
+
+
+def test_excluded_or_ntc_reactions_are_not_a_mix():
+    calculated = _plate("R2")
+    excluded = _project(_instrument_plate("R1") + [(*calculated[0][:1], "H1", "x", "U", "unknown", None, logistic(25))] + calculated)
+    excluded.runs[1].wells["H1"].reactions[0].excluded = True
+    assert not [f for f in analyze(excluded).flags if f.code == "mixed_cq_sources" and f.target == "U"]
+    rows = [("R1", "A1", "a", "U", "unknown", 22.0, None), ("R2", "H1", None, "U", "ntc", None, logistic(30))] + calculated
+    assert not [f for f in analyze(_project(rows)).flags if f.code == "mixed_cq_sources" and f.target == "U"]
+
+
+def test_threshold_of_a_target_only_in_ntc_on_a_plate_is_not_a_difference():
+    rows = _plate("R1") + _plate("R2")
+    rows.append(("R3", "H1", None, "T", "ntc", None, logistic(30)))
+    p = _project(rows)
+    p.runs[2].thresholds["T"] = 0.5
+    assert "thresholds_differ_no_irc" not in _codes(analyze(p))

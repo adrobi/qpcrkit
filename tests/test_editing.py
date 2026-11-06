@@ -2,6 +2,7 @@ import pytest
 
 from qpcr_core import editing as ed
 from qpcr_core.sessions import project_to_dict
+from qpcr_core.editing import EditHistory, rename_target_in_run, set_target
 from tests.factories import make_project
 
 
@@ -240,3 +241,47 @@ def test_assign_sample_drops_the_old_name():
     ed.assign_sample(p, "R1", ["A1", "A2"], "old")
     ed.assign_sample(p, "R1", ["A1", "A2"], "new")
     assert "old" not in p.samples and "new" in p.samples
+
+
+# --- manual thresholds follow the target ---
+
+
+def _with_threshold():
+    p = make_project(
+        [("R1", "A1", "s", "SYBR", "unknown", 20.0, None), ("R1", "A2", "s", "SYBR", "unknown", 20.0, None)]
+    )
+    p.runs[0].thresholds["SYBR"] = 0.2
+    return p
+
+
+def test_undo_restores_a_manual_threshold():
+    p = _with_threshold()
+    history = EditHistory()
+    history.record(p)
+    p.runs[0].thresholds["SYBR"] = 0.5
+    assert history.undo(p).runs[0].thresholds["SYBR"] == 0.2
+
+
+def test_rename_takes_the_threshold_along():
+    p = _with_threshold()
+    rename_target_in_run(p, "R1", "SYBR", "GAPDH")
+    assert p.runs[0].thresholds == {"GAPDH": 0.2}
+
+
+def test_rename_keeps_the_threshold_already_set_on_the_new_name():
+    p = _with_threshold()
+    p.runs[0].thresholds["GAPDH"] = 0.3
+    rename_target_in_run(p, "R1", "SYBR", "GAPDH")
+    assert p.runs[0].thresholds == {"GAPDH": 0.3}
+
+
+def test_threshold_of_a_target_gone_from_the_run_is_dropped():
+    p = _with_threshold()
+    set_target(p, "R1", ["A1", "A2"], "GAPDH")
+    assert p.runs[0].thresholds == {}
+
+
+def test_threshold_stays_while_some_wells_keep_the_target():
+    p = _with_threshold()
+    set_target(p, "R1", ["A1"], "GAPDH")
+    assert p.runs[0].thresholds == {"SYBR": 0.2}
