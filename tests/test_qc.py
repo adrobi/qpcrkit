@@ -114,7 +114,7 @@ def test_threshold_settings_reach_messages():
         eff_min=0.8,
         eff_max=1.05,
     )
-    flag = next(f for f in fit_std_curves(p, lambda run, rxn: rxn.cq)[1] if f.code == "efficiency_out_of_range")
+    flag = next(f for f in fit_std_curves(p, lambda run, well, rxn: rxn.cq)[1] if f.code == "efficiency_out_of_range")
     text = tr("qc.efficiency_out_of_range", **flag.params)
     assert "80" in text and "105" in text
 

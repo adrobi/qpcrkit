@@ -7,9 +7,11 @@ from collections import defaultdict
 
 from .flags import Flag
 from .models import Project
+from .stdcurve import CqFn
 
 
-def check_reactions(project: Project) -> list[Flag]:
+def check_reactions(project: Project, cq_of: CqFn | None = None) -> list[Flag]:
+    """``cq_of`` gives the Cq to judge; by default the instrument's."""
     s = project.settings
     flags: list[Flag] = []
     # key -> list of (coord, cq or None)
@@ -20,15 +22,16 @@ def check_reactions(project: Project) -> list[Flag]:
     for run, well, rxn in project.iter_reactions():
         if rxn.excluded:
             continue
+        cq = rxn.cq if cq_of is None else cq_of(run, well, rxn)
         if rxn.role == "ntc":
-            if rxn.cq is not None and rxn.cq < s.ntc_cq_min:
-                flags.append(Flag("error", "ntc_contamination", {"cq": rxn.cq}, run.id, (well.coord,), rxn.target, well.sample))
+            if cq is not None and cq < s.ntc_cq_min:
+                flags.append(Flag("error", "ntc_contamination", {"cq": cq}, run.id, (well.coord,), rxn.target, well.sample))
             continue
-        if rxn.role == "unknown" and rxn.cq is not None and rxn.cq >= s.late_cq:
-            flags.append(Flag("info", "late_amplification", {"cq": rxn.cq}, run.id, (well.coord,), rxn.target, well.sample))
+        if rxn.role == "unknown" and cq is not None and cq >= s.late_cq:
+            flags.append(Flag("info", "late_amplification", {"cq": cq}, run.id, (well.coord,), rxn.target, well.sample))
         if rxn.role == "nrt":
-            if rxn.cq is not None:
-                nrt.append((run.id, rxn.target, well.sample, well.coord, rxn.cq))
+            if cq is not None:
+                nrt.append((run.id, rxn.target, well.sample, well.coord, cq))
             continue
         if rxn.role == "std":
             if rxn.quantity is None:  # no level to group by
@@ -39,7 +42,7 @@ def check_reactions(project: Project) -> list[Flag]:
             continue
         else:
             key = (run.id, rxn.target, rxn.role, well.sample, None)
-        groups[key].append((well.coord, rxn.cq))
+        groups[key].append((well.coord, cq))
 
     if unnamed:
         flags.append(Flag("info", "wells_without_sample", {"count": len(unnamed)}))

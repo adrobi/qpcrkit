@@ -14,6 +14,7 @@ from statistics import fmean
 
 from .flags import Flag
 from .models import Project
+from .stdcurve import CqFn
 
 
 def _factors(irc: dict[tuple[str, str], dict[str, float]], keys: list[tuple[str, str]], runs: list[str]) -> dict[str, float]:
@@ -25,15 +26,17 @@ def _factors(irc: dict[tuple[str, str], dict[str, float]], keys: list[tuple[str,
     return {r: fmean(v) for r, v in deviations.items()}
 
 
-def calibration_factors(project: Project) -> tuple[dict[tuple[str, str], float], list[Flag]]:
+def calibration_factors(project: Project, cq_of: CqFn | None = None) -> tuple[dict[tuple[str, str], float], list[Flag]]:
+    """``cq_of`` gives the Cq of a calibrator; by default the instrument's."""
     if len(project.runs) <= 1:
         return {}, []
     values: dict[tuple[str, str], dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
     targets: set[str] = set()
     for run, well, rxn in project.iter_reactions():
         targets.add(rxn.target)
-        if rxn.role == "irc" and not rxn.excluded and rxn.cq is not None:
-            values[(well.sample or "", rxn.target)][run.id].append(rxn.cq)
+        cq = rxn.cq if cq_of is None else cq_of(run, well, rxn)
+        if rxn.role == "irc" and not rxn.excluded and cq is not None:
+            values[(well.sample or "", rxn.target)][run.id].append(cq)
 
     if not values:
         return {}, [Flag("info", "no_irc")]

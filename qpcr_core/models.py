@@ -88,6 +88,7 @@ class Run:
     instrument: str = "generic"
     plate_format: int = 96
     wells: dict[str, Well] = field(default_factory=dict)
+    thresholds: dict[str, float] = field(default_factory=dict)  # manual threshold: target -> value
 
 
 @dataclass
@@ -119,6 +120,7 @@ class Settings:
     r2_min: float = 0.98
     pool_std_runs: bool = True
     nrt_min_delta: float = 5.0  # cycles between a sample and its no-RT control
+    cq_source: str = "instrument"  # instrument | calculated
 
 
 @dataclass

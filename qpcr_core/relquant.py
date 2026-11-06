@@ -10,7 +10,7 @@ import math
 from dataclasses import dataclass
 from statistics import fmean
 
-from .curves import USABLE_EFFICIENCY
+from .curves import USABLE_EFFICIENCY, CurveKey, CurveResult, target_efficiencies
 from .flags import Flag
 from .models import Project
 from .stdcurve import StdCurve
@@ -30,14 +30,30 @@ class SampleRQ:
 
 
 def efficiencies_with_source(
-    project: Project, curves: dict[tuple[str | None, str], StdCurve]
+    project: Project,
+    curves: dict[tuple[str | None, str], StdCurve],
+    curve_results: dict[CurveKey, CurveResult] | None = None,
 ) -> tuple[dict[str, float], dict[str, str], list[Flag]]:
-    """Efficiency per target, where it came from (stdcurve | manual | ideal), and flags."""
+    """Efficiency per target, where it came from (stdcurve | curves | manual | ideal), and flags."""
+    from_curves = target_efficiencies(project, curve_results or {})
+    s = project.settings
     eff: dict[str, float] = {}
     source: dict[str, str] = {}
     flags: list[Flag] = []
     lo, hi = USABLE_EFFICIENCY
     for name, t in project.targets.items():
+        if t.efficiency_mode == "curves":  # a manual value is never put in its place without saying so
+            value = from_curves.get(name)
+            if value is None:
+                flags.append(Flag("warning", "efficiency_curves_unusable", target=name))
+                eff[name], source[name] = 1.0, "ideal"
+                continue
+            eff[name], source[name] = value, "curves"
+            if not s.eff_min <= value <= s.eff_max:
+                flags.append(Flag("warning", "efficiency_out_of_range", {"eff": value, "min": s.eff_min, "max": s.eff_max}, target=name))
+            if any(k[2] == name and r.baseline_subtracted for k, r in (curve_results or {}).items()):
+                flags.append(Flag("info", "efficiency_from_subtracted", target=name))
+            continue
         own = [c.efficiency for (_run, target), c in curves.items() if target == name]
         if t.efficiency_mode == "stdcurve" and own:
             if lo <= fmean(own) <= hi:

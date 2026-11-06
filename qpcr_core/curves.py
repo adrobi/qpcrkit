@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
+from dataclasses import dataclass
 from functools import lru_cache
 
 import numpy as np
 from scipy.ndimage import median_filter
 from scipy.signal import find_peaks, savgol_filter
 
-from .models import Curve
+from .flags import Flag
+from .models import Curve, Project, Reaction, Run, Settings
 
 _MIN_POINTS = 5
 USABLE_EFFICIENCY = (0.5, 1.5)  # outside this a curve is broken (e.g. swapped quantities), not just poor
@@ -252,7 +255,12 @@ def melt_noise(derivative: Curve) -> float:
 
 
 def melt_peaks(derivative: Curve, min_height: float) -> list[float]:
-    """Tm of the significant peaks, highest first; the top is refined by a parabola through 3 points."""
+    """Tm of the significant peaks, highest first."""
+    return [tm for _, tm in _melt_peak_list(derivative, min_height)]
+
+
+def _melt_peak_list(derivative: Curve, min_height: float) -> list[tuple[float, float]]:
+    """(height, Tm), highest first; the top is refined by a parabola through 3 points."""
     x, y = np.asarray(derivative.x, dtype=float), np.asarray(derivative.y, dtype=float)
     step = float(np.median(np.diff(x)))
     distance = max(1, int(round(_MELT_MIN_DISTANCE_C / step)))
@@ -263,4 +271,153 @@ def melt_peaks(derivative: Curve, min_height: float) -> list[float]:
         bend = a - 2 * b + c
         shift = 0.5 * (a - c) / bend if bend else 0.0
         out.append((float(b), float(x[i] + shift * step)))
-    return [t for _, t in sorted(out, reverse=True)]
+    return sorted(out, reverse=True)
+
+
+# --- one project ---
+
+CurveKey = tuple[str, str, str, str]  # run_id, coord, target, fluor
+
+
+@dataclass(frozen=True)
+class CurveResult:
+    cq_calc: float | None
+    efficiency: float | None
+    window_r2: float | None
+    tms: tuple[float, ...]
+    threshold: float | None
+    baseline_subtracted: bool
+
+
+def run_uses_calculated(run: Run, settings: Settings) -> bool:
+    """Our Cq on request, or when the instrument gave none: the source is chosen for a whole run."""
+    if settings.cq_source == "calculated":
+        return True
+    return not any(r.cq is not None for w in run.wells.values() for r in w.reactions)
+
+
+@lru_cache(maxsize=8192)
+def _amplification_view(curve: Curve, already_subtracted: bool) -> tuple[Curve, bool] | None:
+    """The curve without its background and whether it amplified; None when it cannot be used."""
+    usable = clean(curve)
+    if usable is None:
+        return None
+    try:
+        return subtract_baseline(usable, already_subtracted), is_amplified(usable, already_subtracted)
+    except (ValueError, np.linalg.LinAlgError):
+        return None
+
+
+@lru_cache(maxsize=8192)
+def _melt_view(curve: Curve, ready_derivative: bool) -> tuple[Curve, float] | None:
+    """-dF/dT and its noise."""
+    usable = clean(curve)
+    if usable is None or len(set(usable.x)) < len(usable.x):
+        return None
+    try:
+        derivative = usable if ready_derivative else melt_derivative(usable)
+        return derivative, melt_noise(derivative)
+    except ValueError:
+        return None
+
+
+def _melt_of(rxn: Reaction) -> tuple[Curve, float] | None:
+    if rxn.melt is not None:
+        return _melt_view(rxn.melt, False)
+    return _melt_view(rxn.melt_derivative, True) if rxn.melt_derivative is not None else None
+
+
+def analyze_curves(project: Project) -> tuple[dict[CurveKey, CurveResult], list[Flag]]:
+    views: dict[CurveKey, tuple[Curve, bool] | None] = {}
+    by_target: dict[tuple[str, str], list[Curve]] = defaultdict(list)
+    unusable: dict[str, list[str]] = defaultdict(list)
+    for run, well, rxn in project.iter_reactions():
+        if rxn.amplification is None:
+            continue
+        view = views[(run.id, well.coord, rxn.target, rxn.fluor)] = _amplification_view(rxn.amplification, rxn.baseline_subtracted)
+        if view is None:
+            unusable[run.id].append(well.coord)
+        elif not rxn.excluded and rxn.role != "ntc":
+            by_target[(run.instrument, rxn.target)].append(view[0])
+    thresholds = {k: auto_threshold(v) for k, v in by_target.items()}
+    windows = {k: efficiency_window(v) for k, v in by_target.items()}
+
+    # Peak height that counts: from the amplified reactions of a target on its run, so an NTC is judged by them.
+    main_peaks: dict[tuple[str, str], list[float]] = defaultdict(list)
+    for run, well, rxn in project.iter_reactions():
+        view = views.get((run.id, well.coord, rxn.target, rxn.fluor))
+        amplified = view[1] if view else rxn.cq is not None
+        melt = _melt_of(rxn)
+        if melt and amplified and not rxn.excluded and rxn.role != "ntc":
+            peaks = _melt_peak_list(melt[0], MELT_NOISE_FACTOR * melt[1])
+            if peaks:
+                main_peaks[(run.id, rxn.target)].append(peaks[0][0])
+
+    results: dict[CurveKey, CurveResult] = {}
+    for run, well, rxn in project.iter_reactions():
+        melt = _melt_of(rxn)
+        if rxn.amplification is None and melt is None:
+            continue
+        key = (run.id, well.coord, rxn.target, rxn.fluor)
+        view = views.get(key)
+        group = (run.instrument, rxn.target)
+        threshold = run.thresholds.get(rxn.target) or thresholds.get(group)
+        cq = e = r2 = None
+        if view is not None and view[1]:
+            cq = cq_at(view[0], threshold) if threshold else None
+            window = windows.get(group)
+            fitted = well_efficiency(view[0], window) if window else None
+            if fitted:
+                e, r2 = fitted
+        tms: tuple[float, ...] = ()
+        if melt is not None:
+            heights = main_peaks.get((run.id, rxn.target))
+            floor = 0.1 * float(np.median(heights)) if heights else 0.0
+            tms = tuple(melt_peaks(melt[0], max(MELT_NOISE_FACTOR * melt[1], floor)))
+        results[key] = CurveResult(cq, e, r2, tms, threshold, rxn.baseline_subtracted)
+    flags = [Flag("warning", "curve_unusable", {"count": len(c)}, run_id, tuple(c)) for run_id, c in unusable.items()]
+    return results, flags
+
+
+def target_efficiencies(project: Project, results: dict[CurveKey, CurveResult]) -> dict[str, float]:
+    """The efficiency of each target from its curves, without NTC and excluded reactions."""
+    fitted: dict[str, list[tuple[float, float]]] = defaultdict(list)
+    for run, well, rxn in project.iter_reactions():
+        result = results.get((run.id, well.coord, rxn.target, rxn.fluor))
+        if result and result.efficiency is not None and not rxn.excluded and rxn.role != "ntc":
+            fitted[rxn.target].append((result.efficiency, result.window_r2))
+    out = {t: target_efficiency(v) for t, v in fitted.items()}
+    return {t: e for t, e in out.items() if e is not None}
+
+
+def source_flags(project: Project, results: dict[CurveKey, CurveResult], factors: dict[tuple[str, str], float]) -> list[Flag]:
+    """Warnings about where the Cq of each run came from; they depend on whether runs are calibrated."""
+    flags: list[Flag] = []
+    sources: dict[str, set[bool]] = defaultdict(set)
+    thresholds: dict[str, set[float]] = defaultdict(set)
+    for run in project.runs:
+        calculated = run_uses_calculated(run, project.settings)
+        without = []
+        with_curve = False
+        for well in run.wells.values():
+            for rxn in well.reactions:
+                sources[rxn.target].add(calculated)
+                if rxn.excluded:
+                    continue
+                result = results.get((run.id, well.coord, rxn.target, rxn.fluor))
+                if calculated and result is not None and result.threshold is not None:
+                    thresholds[rxn.target].add(result.threshold)
+                if rxn.amplification is None:
+                    without.append(well.coord)
+                else:
+                    with_curve = True
+        if calculated and without and (with_curve or project.settings.cq_source == "calculated"):
+            flags.append(Flag("warning", "no_curve_for_calculated", {"count": len(without)}, run.id, tuple(without)))
+    for target, kinds in sources.items():
+        if len(kinds) > 1:
+            severity = "warning" if any(k[1] == target for k in factors) else "error"
+            flags.append(Flag(severity, "mixed_cq_sources", target=target))
+    for target, values in thresholds.items():
+        if len(values) > 1 and not any(k[1] == target for k in factors):
+            flags.append(Flag("warning", "thresholds_differ_no_irc", target=target))
+    return flags

@@ -9,9 +9,9 @@ from dataclasses import dataclass
 import numpy as np
 
 from .flags import Flag
-from .models import Project, Reaction, Run
+from .models import Project, Reaction, Run, Well
 
-CqFn = Callable[[Run, Reaction], "float | None"]
+CqFn = Callable[[Run, Well, Reaction], "float | None"]
 
 
 @dataclass
@@ -42,7 +42,7 @@ def fit_std_curves(project: Project, cq_of: CqFn) -> tuple[dict[tuple[str | None
             no_quantity[(run.id, rxn.target)].append(well.coord)
             continue
         key = (None if s.pool_std_runs else run.id, rxn.target)
-        data[key][rxn.quantity].append(cq_of(run, rxn))
+        data[key][rxn.quantity].append(cq_of(run, well, rxn))
 
     curves: dict[tuple[str | None, str], StdCurve] = {}
     flags = [

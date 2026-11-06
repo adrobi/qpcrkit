@@ -7,7 +7,7 @@ from qpcr_core.stdcurve import fit_std_curves, quantify
 from tests.factories import make_project
 
 
-def raw_cq(run, rxn):
+def raw_cq(run, well, rxn):
     return None if rxn.excluded else rxn.cq
 
 
