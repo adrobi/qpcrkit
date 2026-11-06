@@ -76,3 +76,18 @@ def test_unknown_keys_ignored():
     d["runs"][0]["wells"]["A1"]["reactions"][0]["future_field"] = 3
     d["settings"]["future_field"] = 4
     assert project_from_dict(d) == _project()
+
+
+def test_curves_lists_become_tuples_and_old_sessions_open():
+    from qpcr_core.models import Curve
+
+    assert Curve([1], [2]) == Curve((1,), (2,))
+    p = _project()
+    d = project_to_dict(p)
+    rxn = d["runs"][0]["wells"]["A1"]["reactions"][0]
+    rxn["amplification"] = {"x": [1.0, 2.0], "y": [0.1, 0.2]}
+    rxn.pop("melt_derivative")
+    rxn.pop("baseline_subtracted")
+    assert project_from_dict(d) == p
+    rxn["melt_derivative"] = {"x": [60.0], "y": [1.0]}
+    assert project_from_dict(d).runs[0].wells["A1"].reactions[0].melt_derivative == Curve((60.0,), (1.0,))

@@ -57,3 +57,9 @@ def test_sample_setup_section_before_results():
     run = quantstudio.parse(rows, "x", "R1").run
     assert run.wells["A1"].reactions[0].cq == 22.5
     assert len(run.wells["A1"].reactions) == 1
+
+
+def test_crt_header():
+    rows = [["Well", "Sample Name", "Target Name", "Task", "CRT"], ["A1", "s", "t", "UNKNOWN", "20.0"]]
+    assert quantstudio.sniff(rows)
+    assert quantstudio.parse(rows, "x", "R1").run.wells["A1"].reactions[0].cq == 20.0

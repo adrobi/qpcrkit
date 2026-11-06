@@ -36,6 +36,7 @@ def _reaction(d: dict) -> Reaction:
     kw = _known(Reaction, d)
     kw["amplification"] = _curve(kw.get("amplification"))
     kw["melt"] = _curve(kw.get("melt"))
+    kw["melt_derivative"] = _curve(kw.get("melt_derivative"))
     return Reaction(**kw)
 
 

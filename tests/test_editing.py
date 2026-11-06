@@ -98,3 +98,19 @@ def test_record_clears_redo_and_depth():
         n += 1
     assert n == 3
     assert h.undo(p) is None
+
+
+def test_curves_are_shared_in_undo_snapshots():
+    from qpcr_core.editing import clone_project
+    from qpcr_core.models import Curve
+
+    p = _p()
+    curve = Curve([1, 2], [3, 4])
+    p.run("R1").wells["A1"].reactions[0].amplification = curve
+    snap = clone_project(p)
+    assert snap == p
+    assert snap.run("R1").wells["A1"].reactions[0].amplification is curve
+    ed.set_excluded(p, "R1", "A1", None, True)
+    ed.set_group(p, "s1", "LPS")
+    assert not snap.run("R1").wells["A1"].reactions[0].excluded
+    assert "s1" not in snap.samples

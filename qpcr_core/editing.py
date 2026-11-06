@@ -5,7 +5,6 @@ from __future__ import annotations
 import dataclasses
 
 from .models import Project, Reaction, Sample, Target
-from .sessions import project_from_dict, project_to_dict
 
 
 def _reactions(project: Project, run_id: str, coords: list[str], target: str | None) -> list[Reaction]:
@@ -71,13 +70,27 @@ def update_settings(project: Project, **changes) -> None:
         setattr(project.settings, key, value)
 
 
+def clone_project(p: Project) -> Project:
+    """A copy for undo: containers are new, immutable curves are shared."""
+    r = dataclasses.replace
+    return Project(
+        runs=[
+            r(run, wells={c: r(w, reactions=[r(x) for x in w.reactions]) for c, w in run.wells.items()})
+            for run in p.runs
+        ],
+        targets={k: r(v) for k, v in p.targets.items()},
+        samples={k: r(v) for k, v in p.samples.items()},
+        settings=r(p.settings),
+    )
+
+
 class EditHistory:
-    """Snapshots taken before each edit; undo/redo return a rebuilt Project."""
+    """Snapshots taken before each edit; undo and redo hand back a stored Project."""
 
     def __init__(self, max_depth: int = 100) -> None:
         self.max_depth = max_depth
-        self._undo: list[dict] = []
-        self._redo: list[dict] = []
+        self._undo: list[Project] = []
+        self._redo: list[Project] = []
 
     @property
     def can_undo(self) -> bool:
@@ -88,18 +101,18 @@ class EditHistory:
         return bool(self._redo)
 
     def record(self, project: Project) -> None:
-        self._undo.append(project_to_dict(project))
+        self._undo.append(clone_project(project))
         del self._undo[: -self.max_depth]
         self._redo.clear()
 
     def undo(self, project: Project) -> Project | None:
         if not self._undo:
             return None
-        self._redo.append(project_to_dict(project))
-        return project_from_dict(self._undo.pop())
+        self._redo.append(clone_project(project))
+        return self._undo.pop()
 
     def redo(self, project: Project) -> Project | None:
         if not self._redo:
             return None
-        self._undo.append(project_to_dict(project))
-        return project_from_dict(self._redo.pop())
+        self._undo.append(clone_project(project))
+        return self._redo.pop()

@@ -46,10 +46,16 @@ def coord_from_index(index: int, plate_format: int) -> str:
     return format_coord((index - 1) // cols, (index - 1) % cols)
 
 
-@dataclass
+@dataclass(frozen=True)
 class Curve:
-    x: list[float]
-    y: list[float]
+    """Immutable, so undo snapshots can share it instead of copying thousands of numbers."""
+
+    x: tuple[float, ...]
+    y: tuple[float, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "x", tuple(self.x))
+        object.__setattr__(self, "y", tuple(self.y))
 
 
 @dataclass
@@ -63,6 +69,8 @@ class Reaction:
     exclude_reason: str = ""
     amplification: Curve | None = None
     melt: Curve | None = None
+    melt_derivative: Curve | None = None  # only when the instrument gave no raw melt curve
+    baseline_subtracted: bool = False  # the amplification curve already has its background removed
 
 
 @dataclass
