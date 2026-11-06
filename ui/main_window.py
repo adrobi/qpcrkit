@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QLibraryInfo, QLocale, Qt, QTimer, QTranslator
-from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -45,7 +45,7 @@ from ui.editor import ProjectEditor
 from ui.plate_view import PlateView
 from ui.result_tabs import ExpressionTab, QcTab, StdCurveTab
 from ui.side_panels import ProjectTree, SettingsPanel
-from ui.theme import app_icon, app_qss
+from ui.theme import app_icon, app_qss, resolve_dark, system_is_dark
 
 RECALC_DELAY_MS = 300
 _qt_translator: QTranslator | None = None
@@ -84,13 +84,15 @@ class MainWindow(QMainWindow):
         self.editor = ProjectEditor()
         self.results: Results | None = None
         self.current_run_id: str | None = None
+        self.dark = False
         self.last_import_note = ""
         self._timer = QTimer(self, singleShot=True, interval=RECALC_DELAY_MS)
         self._timer.timeout.connect(self.recalculate_now)
         self.editor.changed.connect(self._on_project_changed)
         self.resize(1400, 860)
         self._build_ui()
-        self.apply_theme(self.config.dark, save=False)
+        QGuiApplication.styleHints().colorSchemeChanged.connect(self._on_scheme_changed)
+        self.apply_theme(self.config.theme, save=False)
         self._on_project_changed()
 
     # --- construction -------------------------------------------------------------------------
@@ -183,9 +185,12 @@ class MainWindow(QMainWindow):
         self.redo_action = self._action(edit_menu, "act.redo", self.editor.redo, QKeySequence.StandardKey.Redo)
 
         view_menu = mb.addMenu(tr("menu.view"))
-        self.dark_action = self._action(view_menu, "act.dark", lambda: self.apply_theme(self.dark_action.isChecked()))
-        self.dark_action.setCheckable(True)
-        self.dark_action.setChecked(self.config.dark)
+        themes = QActionGroup(self)
+        for mode in ("auto", "light", "dark"):
+            a = self._action(view_menu, f"act.theme_{mode}", lambda m=mode: self.apply_theme(m))
+            a.setCheckable(True)
+            a.setChecked(self.config.theme == mode)
+            themes.addAction(a)
         view_menu.addSeparator()
         langs = QActionGroup(self)
         for lang in ("ru", "en"):
@@ -236,9 +241,8 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(tr("ui.analysis_failed", error=exc))
             return
         self.results = results
-        dark = self.config.dark
         for tab in (self.std, self.expr, self.qc):
-            tab.set_results(project, results, dark)
+            tab.set_results(project, results, self.dark)
         if not project.runs:
             self.statusBar().showMessage(tr("ui.no_run"))
         else:
@@ -426,14 +430,22 @@ class MainWindow(QMainWindow):
 
     # --- view --------------------------------------------------------------------------------
 
-    def apply_theme(self, dark: bool, save: bool = True) -> None:
-        self.config.dark = dark
+    def apply_theme(self, mode: str, save: bool = True) -> None:
+        self.config.theme = mode
+        self._set_dark(resolve_dark(mode, system_is_dark()))
+        if save:
+            save_config(self.config)
+
+    def _on_scheme_changed(self, scheme: Qt.ColorScheme) -> None:
+        if self.config.theme == "auto":
+            self._set_dark(scheme == Qt.ColorScheme.Dark)
+
+    def _set_dark(self, dark: bool) -> None:
+        self.dark = dark
         app = QApplication.instance()
         if app is not None and app.styleSheet() != app_qss(dark):  # re-setting repolishes every widget
             app.setStyleSheet(app_qss(dark))
         self.plate.set_theme(dark)
-        if save:
-            save_config(self.config)
         if self.results is not None:
             for tab in (self.std, self.expr, self.qc):
                 tab.set_results(self.editor.project, self.results, dark)
@@ -450,7 +462,7 @@ class MainWindow(QMainWindow):
         tab = self.tabs.currentIndex()
         self._build_ui()
         self.tabs.setCurrentIndex(tab)
-        self.plate.set_theme(self.config.dark)
+        self.plate.set_theme(self.dark)
         self._on_project_changed()
         self.recalculate_now()
 
@@ -535,10 +547,15 @@ class MainWindow(QMainWindow):
         QMessageBox.about(self, "qpcrkit", tr("ui.about_text", version=qpcr_core.__version__))
 
 
+def setup_app(app: QApplication) -> None:
+    app.setApplicationName("qpcrkit")
+    app.setStyle("Fusion")  # the same look on every Windows version and OS theme
+    app.setWindowIcon(app_icon())
+
+
 def run(project: Path | None = None) -> int:
     app = QApplication.instance() or QApplication(sys.argv)
-    app.setApplicationName("qpcrkit")
-    app.setWindowIcon(app_icon())
+    setup_app(app)
     window = MainWindow()
     try:
         from ui.errors import install_excepthook

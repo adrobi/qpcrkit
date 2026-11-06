@@ -42,8 +42,8 @@ def test_entry_points():
 
 def test_demo_renders_all_tabs_themes_languages(demo):
     assert demo.results is not None and demo.results.groups
-    for dark in (True, False):
-        demo.apply_theme(dark)
+    for mode in ("dark", "light"):
+        demo.apply_theme(mode)
         for lang in ("en", "ru"):
             demo.set_language(lang)
             for i in range(demo.tabs.count()):
@@ -227,3 +227,23 @@ def test_unsaved_dialog_buttons_translated(win):
     box, buttons = win._unsaved_box()
     assert sorted(b.text() for b in buttons) == sorted(["Сохранить", "Не сохранять", "Отмена"])
     box.deleteLater()
+
+
+def test_auto_theme_follows_system(win):
+    from PySide6.QtCore import Qt
+
+    win.apply_theme("auto", save=False)
+    win._on_scheme_changed(Qt.ColorScheme.Dark)
+    assert win.dark is True
+    win._on_scheme_changed(Qt.ColorScheme.Light)
+    assert win.dark is False
+    win.apply_theme("light", save=False)
+    win._on_scheme_changed(Qt.ColorScheme.Dark)
+    assert win.dark is False
+
+
+def test_app_uses_fusion(no_app_stylesheet):
+    from ui.main_window import setup_app
+
+    setup_app(no_app_stylesheet)
+    assert no_app_stylesheet.style().objectName().lower() == "fusion"

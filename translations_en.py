@@ -100,7 +100,7 @@ EN.update(
         "act.save_as": "Save as…", "act.add_run": "Add run…", "act.import_layout": "Import layout…",
         "act.export_xlsx": "Export to Excel…", "act.export_csv": "Export to CSV…", "act.export_html": "HTML report…",
         "act.export_figures": "Figures (SVG)…", "act.exit": "Exit", "act.undo": "Undo", "act.redo": "Redo",
-        "act.dark": "Dark theme", "act.lang_ru": "Русский", "act.lang_en": "English", "act.about": "About",
+        "act.theme_auto": "Theme as in system", "act.theme_light": "Light theme", "act.theme_dark": "Dark theme", "act.lang_ru": "Русский", "act.lang_en": "English", "act.about": "About",
         "tab.plate": "Plate", "tab.data": "Data", "tab.std": "Standards", "tab.expr": "Expression", "tab.qc": "QC",
         "ui.untitled": "untitled",
         "ui.analysis_failed": "Analysis failed: {error}",

@@ -13,7 +13,7 @@ CONFIG_PATH = Path.home() / ".config" / "qpcrkit" / "config.json"
 
 @dataclass
 class AppConfig:
-    dark: bool = False
+    theme: str = "auto"  # auto | light | dark
     language: str = "auto"
     recent: list[str] = field(default_factory=list)
     csv_presets: dict[str, dict] = field(default_factory=dict)
@@ -31,6 +31,8 @@ def load_config(path: Path = CONFIG_PATH) -> AppConfig:
         return AppConfig()
     if not isinstance(data, dict):
         return AppConfig()
+    if "theme" not in data and data.get("dark") is True:  # setting from 1.0
+        data["theme"] = "dark"
     names = {f.name for f in dataclasses.fields(AppConfig)}
     try:
         return AppConfig(**{k: v for k, v in data.items() if k in names})

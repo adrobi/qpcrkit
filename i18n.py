@@ -183,7 +183,7 @@ RU.update(
         "act.save_as": "Сохранить как…", "act.add_run": "Добавить запуск…", "act.import_layout": "Импорт разметки…",
         "act.export_xlsx": "Экспорт в Excel…", "act.export_csv": "Экспорт в CSV…", "act.export_html": "HTML-отчёт…",
         "act.export_figures": "Рисунки (SVG)…", "act.exit": "Выход", "act.undo": "Отменить", "act.redo": "Повторить",
-        "act.dark": "Тёмная тема", "act.lang_ru": "Русский", "act.lang_en": "English", "act.about": "О программе",
+        "act.theme_auto": "Тема как в системе", "act.theme_light": "Светлая тема", "act.theme_dark": "Тёмная тема", "act.lang_ru": "Русский", "act.lang_en": "English", "act.about": "О программе",
         "tab.plate": "Планшет", "tab.data": "Данные", "tab.std": "Стандарты", "tab.expr": "Экспрессия", "tab.qc": "QC",
         "ui.untitled": "без имени",
         "ui.analysis_failed": "Расчёт не выполнен: {error}",

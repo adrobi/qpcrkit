@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 from pathlib import Path
 
 LIGHT = {
@@ -46,12 +47,59 @@ def theme(name: str) -> dict:
     return DARK if name == "dark" else LIGHT
 
 
-def _checkbox_qss(t: dict) -> str:
-    # The platform style draws no frame for an unchecked box on these backgrounds.
+def resource_dir() -> Path:
+    """``ui/`` next to this module, or ``sys._MEIPASS/ui`` in a PyInstaller bundle (see qpcrkit.spec)."""
+    frozen = getattr(sys, "_MEIPASS", None)
+    return Path(frozen) / "ui" if frozen else Path(__file__).resolve().parent
+
+
+def resolve_dark(mode: str, system_dark: bool) -> bool:
+    return system_dark if mode == "auto" else mode == "dark"
+
+
+def system_is_dark() -> bool:
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QGuiApplication
+
+    return QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
+
+
+def tinted_icon(name: str, color: str) -> str:
+    """Path of ``ui/icons/<name>.svg`` drawn in ``color``, for QSS ``url()``; "" if it cannot be written."""
+    folder = Path(tempfile.gettempdir()) / "qpcrkit_icons"
+    target = folder / f"{name}_{color.lstrip('#')}.svg"
+    try:
+        folder.mkdir(exist_ok=True)
+        if not target.exists():
+            svg = (resource_dir() / "icons" / f"{name}.svg").read_text(encoding="utf-8")
+            target.write_text(svg.replace("currentColor", color), encoding="utf-8")
+    except OSError:
+        return ""
+    return target.as_posix()
+
+
+def _image(name: str, color: str) -> str:
+    path = tinted_icon(name, color)
+    return f"image: url({path});" if path else ""
+
+
+def _controls_qss(t: dict) -> str:
+    """Check marks and arrows: a stylesheet on these controls removes the platform's own."""
+    on_accent = "#ffffff" if t is LIGHT else "#06202b"
     return (
-        f"QCheckBox::indicator {{ width: 13px; height: 13px; border: 1px solid {t['dim']};"
-        f" border-radius: 3px; background-color: {t['bg']}; }}"
-        f"QCheckBox::indicator:checked {{ background-color: {t['accent']}; border-color: {t['accent']}; }}"
+        f"QCheckBox::indicator, QTableView::indicator, QTreeView::indicator {{ width: 13px; height: 13px;"
+        f" border: 1px solid {t['dim']}; border-radius: 3px; background-color: {t['bg']}; }}"
+        f"QCheckBox::indicator:checked, QTableView::indicator:checked, QTreeView::indicator:checked {{"
+        f" background-color: {t['accent']}; border-color: {t['accent']}; {_image('check', on_accent)} }}"
+        f"QComboBox::drop-down {{ border: none; width: 18px; }}"
+        f"QComboBox::down-arrow {{ width: 10px; height: 10px; {_image('chevron-down', t['dim'])} }}"
+        f"QSpinBox, QDoubleSpinBox {{ padding-right: 18px; }}"
+        f"QSpinBox::up-button, QDoubleSpinBox::up-button {{ subcontrol-origin: border;"
+        f" subcontrol-position: top right; width: 16px; border: none; }}"
+        f"QSpinBox::down-button, QDoubleSpinBox::down-button {{ subcontrol-origin: border;"
+        f" subcontrol-position: bottom right; width: 16px; border: none; }}"
+        f"QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{ width: 9px; height: 9px; {_image('chevron-up', t['dim'])} }}"
+        f"QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{ width: 9px; height: 9px; {_image('chevron-down', t['dim'])} }}"
     )
 
 
@@ -77,7 +125,7 @@ def app_qss(dark: bool) -> str:
             "QTabWidget::pane { border: 1px solid #3f3f46; }"
             "QTabBar::tab { background-color: #27272a; color: #a1a1aa; padding: 6px 14px; border: 1px solid #3f3f46; }"
             "QTabBar::tab:selected { background-color: #18181b; color: #ffffff; font-weight: bold; }"
-            + _checkbox_qss(DARK)
+            + _controls_qss(DARK)
         )
     return (
         "QWidget { background-color: #f8fafc; color: #0f172a; font-size: 12px; }"
@@ -98,7 +146,7 @@ def app_qss(dark: bool) -> str:
         "QTabWidget::pane { border: 1px solid #cbd5e1; }"
         "QTabBar::tab { background-color: #e2e8f0; color: #475569; padding: 6px 14px; border: 1px solid #cbd5e1; }"
         "QTabBar::tab:selected { background-color: #ffffff; color: #0f172a; font-weight: bold; }"
-        + _checkbox_qss(LIGHT)
+        + _controls_qss(LIGHT)
     )
 
 
@@ -116,12 +164,6 @@ def mpl_style(dark: bool) -> dict:
         "xtick.color": t["dim"],
         "ytick.color": t["dim"],
     }
-
-
-def resource_dir() -> Path:
-    """``ui/`` next to this module, or ``sys._MEIPASS/ui`` in a PyInstaller bundle (see qpcrkit.spec)."""
-    frozen = getattr(sys, "_MEIPASS", None)
-    return Path(frozen) / "ui" if frozen else Path(__file__).resolve().parent
 
 
 def app_icon():

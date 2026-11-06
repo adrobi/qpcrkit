@@ -12,6 +12,15 @@ def qapp():
     return QApplication.instance() or QApplication([])
 
 
+@pytest.fixture
+def no_app_stylesheet(qapp):
+    """The application stylesheet set by other tests would apply over a widget's own."""
+    old = qapp.styleSheet()
+    qapp.setStyleSheet("")
+    yield qapp
+    qapp.setStyleSheet(old)
+
+
 @pytest.fixture(autouse=True)
 def no_config_writes(monkeypatch):
     monkeypatch.setattr("qpcr_core.config.save_config", lambda *a, **k: None)

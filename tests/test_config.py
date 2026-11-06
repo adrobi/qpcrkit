@@ -6,7 +6,7 @@ from qpcr_core.importers.generic_csv import ColumnMapping
 
 def test_round_trip(tmp_path):
     path = tmp_path / "c.json"
-    cfg = AppConfig(dark=True, language="ru", recent=["a.qpcrkit.json"],
+    cfg = AppConfig(theme="dark", language="ru", recent=["a.qpcrkit.json"],
                     csv_presets={"lab": ColumnMapping(well="Pos", target="Gene", cq="Ct").to_dict()})
     save_config(cfg, path)
     assert load_config(path) == cfg
@@ -32,5 +32,15 @@ def test_missing_or_broken(tmp_path):
 
 def test_unknown_keys_ignored(tmp_path):
     p = tmp_path / "c.json"
-    p.write_text(json.dumps({"dark": True, "future": 1}), encoding="utf-8")
-    assert load_config(p) == AppConfig(dark=True)
+    p.write_text(json.dumps({"language": "ru", "future": 1}), encoding="utf-8")
+    assert load_config(p) == AppConfig(language="ru")
+
+
+def test_old_dark_setting_migrates(tmp_path):
+    p = tmp_path / "c.json"
+    p.write_text(json.dumps({"dark": True}), encoding="utf-8")
+    assert load_config(p).theme == "dark"
+    p.write_text(json.dumps({"dark": False}), encoding="utf-8")
+    assert load_config(p).theme == "auto"
+    p.write_text(json.dumps({"theme": "light", "dark": True}), encoding="utf-8")
+    assert load_config(p).theme == "light"
