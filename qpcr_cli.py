@@ -93,6 +93,8 @@ def _analyze(args: argparse.Namespace) -> int:
     except SessionError as exc:
         print(exc, file=sys.stderr)
         return 2
+    if args.cq_source:
+        project.settings.cq_source = args.cq_source
     res = analyze(project)
     counts = {s: len(res.flags_by_severity(s)) for s in ("error", "warning", "info")}
     print(tr("cli.summary", **counts))
@@ -122,7 +124,14 @@ def _analyze(args: argparse.Namespace) -> int:
             export_html(project, res, args.html)
             outputs.append(args.html)
         if args.figures:
-            from qpcr_core.figures import expression_figure, safe_name, save_figure, std_curve_figure
+            from qpcr_core.figures import (
+                amplification_figure,
+                expression_figure,
+                melt_figure,
+                safe_name,
+                save_figure,
+                std_curve_figure,
+            )
 
             out = Path(args.figures)
             out.mkdir(parents=True, exist_ok=True)
@@ -131,6 +140,12 @@ def _analyze(args: argparse.Namespace) -> int:
                 save_figure(fig, out / f"expression_{safe_name(target)}.svg")
             for (run_id, target), curve in res.std_curves.items():
                 save_figure(std_curve_figure(curve), out / f"stdcurve_{safe_name(target)}_{run_id or 'pooled'}.svg")
+            for run in project.runs:
+                reactions = [r for w in run.wells.values() for r in w.reactions if not r.excluded]
+                if any(r.amplification is not None for r in reactions):
+                    save_figure(amplification_figure(project, res, run.id), out / f"amplification_{safe_name(run.id)}.svg")
+                if any(r.melt is not None or r.melt_derivative is not None for r in reactions):
+                    save_figure(melt_figure(project, res, run.id), out / f"melt_{safe_name(run.id)}.svg")
             outputs.append(str(out))
     except OSError as exc:
         print(tr("cli.file_error", error=exc), file=sys.stderr)
@@ -172,6 +187,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--csv")
     p.add_argument("--html")
     p.add_argument("--figures", help="directory for SVG figures")
+    p.add_argument("--cq-source", choices=("instrument", "calculated"), help="Cq of the instrument or calculated from the curves")
     p.add_argument("--strict", action="store_true", help="exit 1 if there are QC errors")
     p.set_defaults(func=_analyze)
 

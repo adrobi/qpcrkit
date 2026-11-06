@@ -46,6 +46,7 @@ EN: dict[str, str] = {
     "sheet.std": "Standard curves",
     "sheet.abs": "Absolute quantification",
     "sheet.rel": "Relative expression",
+    "sheet.curves": "Curves",
     "sheet.stats": "Statistics",
     "sheet.params": "Analysis parameters",
 }

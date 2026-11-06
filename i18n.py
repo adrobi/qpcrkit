@@ -57,6 +57,7 @@ RU: dict[str, str] = {
     "sheet.std": "Стандартные кривые",
     "sheet.abs": "Абсолютная оценка",
     "sheet.rel": "Относительная экспрессия",
+    "sheet.curves": "Кривые",
     "sheet.stats": "Статистика",
     "sheet.params": "Параметры анализа",
 }

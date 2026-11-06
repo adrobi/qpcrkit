@@ -328,6 +328,20 @@ def _melt_of(rxn: Reaction) -> tuple[Curve, float] | None:
     return _melt_view(rxn.melt_derivative, True) if rxn.melt_derivative is not None else None
 
 
+def subtracted_curve(rxn: Reaction) -> Curve | None:
+    """The amplification curve as it is analysed, without its background."""
+    if rxn.amplification is None:
+        return None
+    view = _amplification_view(rxn.amplification, rxn.baseline_subtracted)
+    return view[0] if view else None
+
+
+def derivative_curve(rxn: Reaction) -> Curve | None:
+    """-dF/dT, from the raw melt or the instrument's own derivative."""
+    view = _melt_of(rxn)
+    return view[0] if view else None
+
+
 def analyze_curves(project: Project) -> tuple[dict[CurveKey, CurveResult], list[Flag]]:
     views: dict[CurveKey, tuple[Curve, bool] | None] = {}
     by_target: dict[tuple[str, str], list[Curve]] = defaultdict(list)

@@ -154,3 +154,29 @@ def test_missing_layout_is_a_message(tmp_path, capsys):
 def test_changelog_script_fails_on_unknown_version():
     out = subprocess.run([sys.executable, str(ROOT / "scripts" / "changelog_section.py"), "v9.9.9"], capture_output=True, text=True)
     assert out.returncode == 1 and "9.9.9" in out.stderr
+
+
+def test_cq_source_on_a_folder_of_real_exports(tmp_path):
+    import shutil
+
+    import openpyxl
+
+    src = tmp_path / "exports"
+    src.mkdir()
+    for f in (Path(__file__).parent / "data" / "real").glob("2016-09-04*"):
+        shutil.copy(f, src / f.name)
+    project = tmp_path / "w.qpcrkit.json"
+    assert main(["new", str(src), "-o", str(project)]) == 0
+    out = tmp_path / "res.xlsx"
+    figs = tmp_path / "figs"
+    assert main(["analyze", str(project), "-o", str(out), "--figures", str(figs), "--cq-source", "calculated"]) == 0
+    assert out.exists()
+    assert list(figs.glob("amplification_*.svg"))
+    assert list(figs.glob("melt_*.svg"))
+    params = {r[0]: r[1] for r in openpyxl.load_workbook(out).worksheets[-1].iter_rows(values_only=True)}
+    assert params["cq_source"] == "calculated"
+
+
+def test_unknown_cq_source_is_rejected(project_file, capsys):
+    with pytest.raises(SystemExit):
+        main(["analyze", str(project_file), "--cq-source", "magic"])

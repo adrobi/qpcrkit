@@ -413,3 +413,23 @@ def test_cq_without_amplification():
 def test_no_curve_flags_without_curves():
     p = _project([("R1", f"A{i}", "s", "T", "unknown", 25.0, None) for i in range(4)])
     assert not {"early_cq", "no_amplification_with_cq", "cq_source_disagree"} & set(_codes(analyze(p)))
+
+
+# --- speed ---
+
+
+def test_second_analysis_does_not_redo_the_baselines():
+    rows = [
+        ("R1", f"{chr(65 + i // 24)}{i % 24 + 1}", f"s{i}", target, "unknown", None, logistic(18 + i % 15, noise=0.002, seed=i * 2 + j))
+        for i in range(384)
+        for j, target in enumerate(("T", "U"))
+    ]
+    p = _project(rows)
+    p.runs[0].plate_format = 384
+    analyze(p)
+    p.runs[0].thresholds["T"] = 0.15
+    before = cv._amplification_view.cache_info()
+    analyze(p)
+    after = cv._amplification_view.cache_info()
+    assert after.misses == before.misses
+    assert after.hits - before.hits >= 768

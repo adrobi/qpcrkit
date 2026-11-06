@@ -8,13 +8,19 @@ import re
 from pathlib import Path
 
 import matplotlib
+import numpy as np
+from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
+from matplotlib.lines import Line2D
 
+from .curves import derivative_curve, subtracted_curve
+from .models import Curve, Project, Reaction
 from .pipeline import Results
 from .stdcurve import StdCurve
 
 _FORMATS = {".svg": "svg", ".pdf": "pdf", ".png": "png"}
 BAR_COLOR = "#2563eb"
+LINE_COLORS = ("#2563eb", "#dc2626", "#059669", "#d97706", "#7c3aed", "#0891b2", "#db2777", "#65a30d")
 
 
 def safe_name(name: str) -> str:
@@ -32,6 +38,80 @@ def significance_stars(p: float | None) -> str:
     if p < 0.05:
         return "*"
     return ""
+
+
+def _curve_axes(fig: Figure, by_target: dict[str, list[Curve]], log: bool = False):
+    """All curves in one collection per target: hundreds of separate lines would be slow to draw."""
+    ax = fig.add_subplot()
+    colors = {t: LINE_COLORS[i % len(LINE_COLORS)] for i, t in enumerate(sorted(by_target))}
+    for target, curves in by_target.items():
+        segments = []
+        for c in curves:
+            y = np.asarray(c.y, dtype=float)
+            segments.append(np.column_stack((c.x, np.where(y > 0, y, np.nan) if log else y)))
+        ax.add_collection(LineCollection(segments, colors=colors[target], linewidths=0.8))
+    if log:
+        ax.set_yscale("log")
+    ax.autoscale_view()
+    if len(by_target) > 1:
+        ax.legend(
+            [Line2D([], [], color=colors[t]) for t in sorted(by_target)],
+            sorted(by_target),
+            fontsize="small",
+            frameon=False,
+        )
+    return ax, colors
+
+
+def _curves_of(project: Project, run_id: str, target: str | None, pick) -> dict[str, list[Curve]]:
+    by_target: dict[str, list[Curve]] = {}
+    for run, _well, rxn in project.iter_reactions():
+        rxn: Reaction
+        if run.id != run_id or rxn.excluded or (target is not None and rxn.target != target):
+            continue
+        curve = pick(rxn)
+        if curve is not None:
+            by_target.setdefault(rxn.target, []).append(curve)
+    return by_target
+
+
+def amplification_figure(
+    project: Project,
+    results: Results,
+    run_id: str,
+    target: str | None = None,
+    log: bool = False,
+    threshold: bool = True,
+    style: dict | None = None,
+) -> Figure:
+    with matplotlib.rc_context(style or {}):
+        fig = Figure(layout="constrained")
+        ax, colors = _curve_axes(fig, _curves_of(project, run_id, target, subtracted_curve), log)
+        ax.set_xlabel("Cycle")
+        ax.set_ylabel("Signal, background removed")
+        ax.set_title(run_id if target is None else f"{run_id}: {target}")
+        if threshold:
+            levels = {(key[2], r.threshold) for key, r in results.curves.items() if key[0] == run_id and r.threshold}
+            for name, value in sorted(levels):
+                if name in colors:
+                    ax.axhline(value, color=colors[name], ls="--", lw=0.8)
+    return fig
+
+
+def melt_figure(
+    project: Project,
+    results: Results,
+    run_id: str,
+    target: str | None = None,
+    style: dict | None = None,
+) -> Figure:
+    with matplotlib.rc_context(style or {}):
+        fig = Figure(layout="constrained")
+        ax, _ = _curve_axes(fig, _curves_of(project, run_id, target, derivative_curve))
+        ax.set_xlabel("Temperature, °C")
+        ax.set_ylabel("-dF/dT")
+        ax.set_title(run_id if target is None else f"{run_id}: {target}")
+    return fig
 
 
 def std_curve_figure(curve: StdCurve, style: dict | None = None) -> Figure:

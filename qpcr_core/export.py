@@ -16,7 +16,7 @@ from openpyxl.utils import get_column_letter
 import qpcr_core
 from i18n import tr
 
-from .figures import expression_figure, std_curve_figure
+from .figures import amplification_figure, expression_figure, melt_figure, std_curve_figure
 from .flags import flag_text
 from .models import Project
 from .pipeline import Results
@@ -29,6 +29,7 @@ _SEVERITY_FILL = {
     "info": PatternFill("solid", fgColor="F1F5F9"),
 }
 CSV_COLUMNS = ["sample", "group", "target", "mean_cq", "delta_cq", "rq", "log2_rq"]
+CURVE_COLUMNS = ["Run", "Well", "Target", "Instrument Cq", "Cq from curve", "E", "Window R²", "Tm", "Threshold"]
 
 
 def _sheet(wb: Workbook, key: str, header: list[str], rows: list[list]):
@@ -52,17 +53,33 @@ def _flag_rows(results: Results) -> list[list]:
     ]
 
 
+def _main_tm(result) -> float | None:
+    return result.tms[0] if result and result.tms else None
+
+
+def _curve_rows(project: Project, results: Results) -> list[list]:
+    rows = []
+    for run, well, rxn in project.iter_reactions():
+        r = results.curves.get((run.id, well.coord, rxn.target, rxn.fluor))
+        if r is not None:
+            rows.append([run.id, well.coord, rxn.target, rxn.cq, r.cq_calc, r.efficiency, r.window_r2, _main_tm(r), r.threshold])
+    return rows
+
+
 def export_xlsx(project: Project, results: Results, path: str | os.PathLike) -> None:
     wb = Workbook()
     wb.remove(wb.active)
     groups = {n: s.group for n, s in project.samples.items()}
 
-    raw = [
-        [run.id, well.coord, well.sample or "", groups.get(well.sample or "", ""), rxn.target, rxn.fluor, rxn.role,
-         rxn.cq, results.calibration.get((run.id, rxn.target), 0.0), rxn.quantity, "yes" if rxn.excluded else "", rxn.exclude_reason]
-        for run, well, rxn in project.iter_reactions()
-    ]
-    _sheet(wb, "sheet.raw", ["Run", "Well", "Sample", "Group", "Target", "Fluor", "Role", "Cq", "Calibration factor", "Quantity", "Excluded", "Reason"], raw)
+    raw = []
+    for run, well, rxn in project.iter_reactions():
+        cv = results.curves.get((run.id, well.coord, rxn.target, rxn.fluor))
+        raw.append([
+            run.id, well.coord, well.sample or "", groups.get(well.sample or "", ""), rxn.target, rxn.fluor, rxn.role,
+            rxn.cq, results.calibration.get((run.id, rxn.target), 0.0), rxn.quantity, "yes" if rxn.excluded else "", rxn.exclude_reason,
+            cv.cq_calc if cv else None, cv.efficiency if cv else None, _main_tm(cv),
+        ])
+    _sheet(wb, "sheet.raw", ["Run", "Well", "Sample", "Group", "Target", "Fluor", "Role", "Cq", "Calibration factor", "Quantity", "Excluded", "Reason", "Cq from curve", "E", "Tm"], raw)
 
     ws = _sheet(wb, "sheet.qc", ["Severity", "Code", "Run", "Wells", "Target", "Sample", "Message"], _flag_rows(results))
     for row in ws.iter_rows(min_row=2):
@@ -86,6 +103,9 @@ def export_xlsx(project: Project, results: Results, path: str | os.PathLike) -> 
     st = [[g.target, g.group, "", g.n, g.fold, g.mean_log2, g.sd_log2, g.sem_log2, g.ci95_log2, None, None, None] for g in results.groups]
     st += [[c.target, c.group_a, c.group_b, None, None, None, None, None, None, c.test, c.statistic, c.p, c.p_adj] for c in results.comparisons]
     _sheet(wb, "sheet.stats", ["Target", "Group", "vs group", "n", "Fold change", "Mean log2", "SD log2", "SEM log2", "95% CI log2", "Test", "Statistic", "p", "p adj (BH)"], st)
+
+    if results.curves:
+        _sheet(wb, "sheet.curves", CURVE_COLUMNS, _curve_rows(project, results))
 
     s = project.settings
     params: list[list] = [["qpcrkit version", qpcr_core.__version__]]
@@ -169,6 +189,16 @@ def export_html(project: Project, results: Results, path: str | os.PathLike) -> 
         parts.append(f"<h2>{html.escape(tr('sheet.std'))}</h2>")
         for curve in results.std_curves.values():
             parts.append(_svg(std_curve_figure(curve)))
+
+    if results.curves:
+        parts.append(f"<h2>{html.escape(tr('sheet.curves'))}</h2>")
+        for run in project.runs:
+            if any(k[0] == run.id for k in results.curves):
+                if any(r.amplification is not None and not r.excluded for w in run.wells.values() for r in w.reactions):
+                    parts.append(_svg(amplification_figure(project, results, run.id)))
+                if any((r.melt or r.melt_derivative) is not None and not r.excluded for w in run.wells.values() for r in w.reactions):
+                    parts.append(_svg(melt_figure(project, results, run.id)))
+        parts.append(_table(CURVE_COLUMNS, _curve_rows(project, results)))
 
     doc = (
         '<!doctype html><html><head><meta charset="utf-8"><title>qpcrkit report</title>'
