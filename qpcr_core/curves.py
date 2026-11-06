@@ -11,10 +11,11 @@ from .models import Curve
 
 _MIN_POINTS = 5
 _SKIP = 2  # the first cycles carry lamp and mixing artefacts
-_FIRST_LINE_END = 8  # cycles 3..8 give the first estimate of the background line
 _MIN_LINE_POINTS = 6  # fewer points cannot tell a drift from the start of the exponent
-_MIN_SIGNAL = 1e-3  # flat curves leave rounding residue, not a signal
+_LOCAL_LINE_POINTS = 10
+_MIN_SIGNAL = 1e-6  # flat curves leave rounding residue, not a signal; some instruments report thousandths
 _MIN_RISE = 0.01  # of the background level, for a raw signal
+_D2_NOISE_GAIN = {5: 0.5345, 7: 0.2182}  # norm of the Savitzky-Golay coefficients
 
 
 def _mad(values: np.ndarray) -> float:
@@ -34,18 +35,27 @@ def clean(curve: Curve | None) -> Curve | None:
     return Curve(x[order].tolist(), y[order].tolist())
 
 
-def _second_derivative(y: np.ndarray) -> np.ndarray:
-    window = 7 if y.size >= 7 else 5
-    return savgol_filter(y, window, 2, deriv=2)
+def _point_noise(y: np.ndarray) -> float:
+    """SD of the noise of one point, from the smallest second differences.
+
+    A drift has none, and the growth, which can take half of the curve, stays out of the lower quartile.
+    """
+    return float(np.percentile(np.abs(np.diff(y, 2)), 25)) / 0.3186 / np.sqrt(6)
 
 
 def _sdm_index(y: np.ndarray) -> int | None:
-    """Where the exponent is fastest to accelerate; None when nothing stands out of the noise."""
-    d2 = _second_derivative(y)
-    i = int(np.argmax(d2[_SKIP:])) + _SKIP
-    if d2[i] <= 8 * _mad(d2) + 1e-9 * float(np.ptp(y)):
+    """Where the rising signal accelerates most; None when nothing stands out of the noise.
+
+    Only rising points count: the decay of the first cycles is convex too.
+    """
+    window = 7 if y.size >= 7 else 5
+    d2 = savgol_filter(y, window, 2, deriv=2)
+    rising = savgol_filter(y, window, 2, deriv=1) > 0
+    rising[: _SKIP] = False
+    if not rising.any():
         return None
-    return i
+    i = int(np.argmax(np.where(rising, d2, -np.inf)))
+    return i if d2[i] > max(5 * _D2_NOISE_GAIN[window] * _point_noise(y), 1e-9 * float(np.ptp(y))) else None
 
 
 @lru_cache(maxsize=8192)
@@ -59,13 +69,28 @@ def _baseline_window(curve: Curve) -> tuple[int, int]:
     end = i_sdm - 3  # exclusive: the last baseline point is four cycles before the acceleration peak
     if end - _SKIP < _MIN_LINE_POINTS:
         return _SKIP, _SKIP + 2  # a very early Cq: a slope here would be the exponent itself
-    line = np.polyfit(x[_SKIP:_FIRST_LINE_END], y[_SKIP:_FIRST_LINE_END], 1)
-    residual = y - np.polyval(line, x)
-    limit = max(5 * _mad(residual[_SKIP:_FIRST_LINE_END]), 1e-4 * float(np.ptp(y)))
-    for i in range(_FIRST_LINE_END, end):
-        if (residual[i : i + 3] > limit).all():
-            return _SKIP, i
-    return _SKIP, end
+    noise = _point_noise(y)
+    limit = max(noise, 1e-4 * float(np.ptp(y)))
+    while end - _SKIP > _MIN_LINE_POINTS:
+        # The last points are judged by a line fitted without them, or they would tilt it towards themselves,
+        # and only by the nearest cycles: an early decay would pass for growth.
+        start = max(_SKIP, end - 2 - _LOCAL_LINE_POINTS)
+        line = np.polyfit(x[start : end - 2], y[start : end - 2], 1)
+        if y[end - 1] <= y[end - 3] or (y[end - 2 : end] - np.polyval(line, x[end - 2 : end])).min() <= limit:
+            break  # not rising here, or back on the line
+        end -= 1
+    return _trim_decay(x, y, end, limit), end
+
+
+def _trim_decay(x: np.ndarray, y: np.ndarray, end: int, limit: float) -> int:
+    """Drop first cycles while the window is not a line: the signal often decays along a curve at the start."""
+    start = _SKIP
+    while end - start > _MIN_LINE_POINTS:
+        residual = y[start:end] - np.polyval(np.polyfit(x[start:end], y[start:end], 1), x[start:end])
+        if float(np.std(residual)) <= 1.5 * limit:
+            break
+        start += 1
+    return start
 
 
 def subtract_baseline(curve: Curve, already_subtracted: bool = False) -> Curve:
@@ -104,7 +129,8 @@ def has_amplification(curve: Curve) -> bool:
         right += 1
     if right - left + 1 < 4:
         return False
-    return bool(y[-1] >= 0.5 * top)  # a lone spike does not stay up
+    # Reaches a plateau or is still growing at the end; a lone spike does neither. The plateau may decay later.
+    return bool(y[-1] >= 0.5 * top or (y >= 0.5 * top).sum() >= 4)
 
 
 def is_amplified(raw: Curve, already_subtracted: bool = False) -> bool:
@@ -117,3 +143,31 @@ def is_amplified(raw: Curve, already_subtracted: bool = False) -> bool:
     start, end = _baseline_window(raw)
     level = abs(float(np.mean(raw.y[start:end])))
     return max(out.y) > _MIN_RISE * level
+
+
+def auto_threshold(curves: list[Curve]) -> float | None:
+    """One threshold for a target, in the log-linear part of its growing curves (background removed)."""
+    growing = [c for c in curves if has_amplification(c)]
+    if not growing:
+        return None
+    lower = 10 * float(np.median([baseline_noise(c) for c in growing]))
+    upper = float(np.percentile([max(c.y) for c in growing], 25)) / 4
+    return lower if lower >= upper else float(np.sqrt(lower * upper))
+
+
+def cq_at(curve: Curve, threshold: float) -> float | None:
+    """The fractional cycle of the first stable crossing."""
+    if threshold <= 0:
+        raise ValueError("threshold must be positive")
+    x, y = curve.x, curve.y
+    for i in range(1, len(y)):
+        if y[i - 1] > threshold or y[i] <= threshold:
+            continue
+        if not all(y[j] > threshold for j in range(i, min(i + 3, len(y)))):
+            continue
+        if y[i - 1] > 0:
+            part = np.log(threshold / y[i - 1]) / np.log(y[i] / y[i - 1])
+        else:
+            part = (threshold - y[i - 1]) / (y[i] - y[i - 1])
+        return float(x[i - 1] + part * (x[i] - x[i - 1]))
+    return None
