@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from qpcr_core import curves as cv
+from qpcr_core.importers.detect import import_file
 from qpcr_core.importers.textio import parse_number, read_sheets
 from qpcr_core.models import Curve
 
@@ -38,3 +39,16 @@ def test_cq_at_matches_instrument_on_its_own_curves():
         xy = sorted(points[key])
         got = cv.cq_at(Curve([p[0] for p in xy], [p[1] for p in xy]), t)
         assert got == pytest.approx(cq, abs=0.1), key
+
+
+def test_tm_matches_instrument():
+    path = REAL / "appbio_quantstudio_designandanalysis_QS7Pro_PCR_with_Melt_example09.xlsx"
+    data, col = _table(read_sheets(path)["Results"], "Well Position", "Tm1")
+    expected = {r[col["Well Position"]]: parse_number(r[col["Tm1"]]) for r in data if parse_number(r[col["Tm1"]]) is not None}
+    assert len(expected) > 20
+    run = import_file(path, "R1").run
+    for coord, tm in expected.items():
+        d = cv.melt_derivative(cv.clean(run.wells[coord].reactions[0].melt))
+        peaks = cv.melt_peaks(d, cv.MELT_NOISE_FACTOR * cv.melt_noise(d))
+        assert peaks, coord
+        assert peaks[0] == pytest.approx(tm, abs=0.5), coord

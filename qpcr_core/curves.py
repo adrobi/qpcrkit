@@ -5,7 +5,8 @@ from __future__ import annotations
 from functools import lru_cache
 
 import numpy as np
-from scipy.signal import savgol_filter
+from scipy.ndimage import median_filter
+from scipy.signal import find_peaks, savgol_filter
 
 from .models import Curve
 
@@ -16,6 +17,9 @@ _MIN_LINE_POINTS = 6  # fewer points cannot tell a drift from the start of the e
 _LOCAL_LINE_POINTS = 10
 _MIN_SIGNAL = 1e-6  # flat curves leave rounding residue, not a signal; some instruments report thousandths
 _MIN_RISE = 0.01  # of the background level, for a raw signal
+MELT_NOISE_FACTOR = 10  # prominence is peak to valley: noise alone reaches 5 SD of it
+_MELT_NOISE_WINDOW_C = 15.0
+_MELT_MIN_DISTANCE_C = 1.5
 _D2_NOISE_GAIN = {5: 0.5345, 7: 0.2182}  # norm of the Savitzky-Golay coefficients
 
 
@@ -229,3 +233,34 @@ def target_efficiency(results: list[tuple[float, float]], min_r2: float = 0.99) 
     """Median over the wells that fit a line and give a believable efficiency."""
     good = [e for e, r2 in results if r2 >= min_r2 and USABLE_EFFICIENCY[0] <= e <= USABLE_EFFICIENCY[1]]
     return float(np.median(good)) if good else None
+
+
+def melt_derivative(curve: Curve, window_c: float = 1.25) -> Curve:
+    """-dF/dT, smoothed over a window given in degrees: instruments step from 0.05 to 0.5 °C."""
+    x, y = np.asarray(curve.x, dtype=float), np.asarray(curve.y, dtype=float)
+    step = float(np.median(np.diff(x)))
+    points = int(round(window_c / step)) | 1
+    points = min(max(points, 5), y.size if y.size % 2 else y.size - 1)
+    return Curve(curve.x, (-savgol_filter(y, points, 2, deriv=1, delta=step)).tolist())
+
+
+def melt_noise(derivative: Curve) -> float:
+    """SD around a wide running median: peaks and a sloping background do not count as noise."""
+    x, y = np.asarray(derivative.x, dtype=float), np.asarray(derivative.y, dtype=float)
+    size = int(round(_MELT_NOISE_WINDOW_C / float(np.median(np.diff(x))))) | 1
+    return 1.4826 * _mad(y - median_filter(y, size=size, mode="nearest"))
+
+
+def melt_peaks(derivative: Curve, min_height: float) -> list[float]:
+    """Tm of the significant peaks, highest first; the top is refined by a parabola through 3 points."""
+    x, y = np.asarray(derivative.x, dtype=float), np.asarray(derivative.y, dtype=float)
+    step = float(np.median(np.diff(x)))
+    distance = max(1, int(round(_MELT_MIN_DISTANCE_C / step)))
+    peaks, _ = find_peaks(y, height=min_height, prominence=min_height, distance=distance)
+    out: list[tuple[float, float]] = []
+    for i in peaks:
+        a, b, c = y[i - 1], y[i], y[i + 1]
+        bend = a - 2 * b + c
+        shift = 0.5 * (a - c) / bend if bend else 0.0
+        out.append((float(b), float(x[i] + shift * step)))
+    return [t for _, t in sorted(out, reverse=True)]

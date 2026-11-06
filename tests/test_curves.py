@@ -9,7 +9,7 @@ import pytest
 
 from qpcr_core import curves as cv
 from qpcr_core.models import Curve
-from tests.curve_factory import flat, logistic
+from tests.curve_factory import flat, logistic, melt
 
 
 def _at(curve: Curve, cycle: int) -> float:
@@ -267,3 +267,45 @@ def test_target_efficiency_rejects_outliers():
     assert cv.target_efficiency([(0.9, 0.999), (0.95, 0.999), (1.0, 0.999), (4.0, 0.999), (0.2, 0.8)]) == pytest.approx(0.95)
     assert cv.target_efficiency([]) is None
     assert cv.target_efficiency([(0.9, 0.5)]) is None
+
+
+# --- melt ---
+
+
+def _peaks(curve: Curve) -> list[float]:
+    d = cv.melt_derivative(curve)
+    return cv.melt_peaks(d, cv.MELT_NOISE_FACTOR * cv.melt_noise(d))
+
+
+@pytest.mark.parametrize("step", [0.5, 0.1])
+def test_tm(step):
+    assert _peaks(melt(tm=84.0, step=step))[0] == pytest.approx(84.0, abs=0.1)
+
+
+def test_two_peaks_sorted_by_height():
+    got = _peaks(melt(tm=78.0, height=0.3, second_tm=86.0, second_height=1.0))
+    assert got == pytest.approx([86.0, 78.0], abs=0.2)
+
+
+def test_noise_has_no_peaks():
+    d = cv.melt_derivative(flat(level=5.0, noise=0.002, cycles=61))
+    assert cv.melt_peaks(d, cv.MELT_NOISE_FACTOR * cv.melt_noise(d)) == []
+
+
+def test_sloped_background_of_a_flat_ntc_has_no_peaks():
+    for seed in range(20):
+        c = melt(height=0.0, noise=0.003, quenching=0.05, seed=seed)
+        assert _peaks(c) == []
+
+
+def test_fine_step_gives_one_peak_not_several():
+    for seed in range(5):
+        assert len(_peaks(melt(step=0.05, noise=0.002, seed=seed))) == 1
+
+
+def test_derivative_keeps_the_axis():
+    c = melt()
+    d = cv.melt_derivative(c)
+    assert d.x == c.x
+    assert len(d.y) == len(c.y)
+    assert max(d.y) == pytest.approx(1.02, abs=0.1)  # falling signal gives a positive peak

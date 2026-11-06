@@ -39,3 +39,29 @@ def flat(level: float = 0.5, drift: float = 0.0, noise: float = 0.0, cycles: int
     if noise:
         y = y + np.random.default_rng(seed).normal(0, noise, cycles)
     return Curve(x.tolist(), y.tolist())
+
+
+def melt(
+    tm: float = 84.0,
+    step: float = 0.5,
+    height: float = 1.0,
+    noise: float = 0.0,
+    second_tm: float | None = None,
+    second_height: float = 0.0,
+    seed: int = 0,
+    start: float = 65.0,
+    stop: float = 95.0,
+    quenching: float = 0.02,
+) -> Curve:
+    """A melt: logistic falls whose -dF/dT peaks have the given heights, over thermal quenching."""
+    x = np.arange(start, stop + step / 2, step)
+
+    def fall(t: float, h: float) -> np.ndarray:
+        return 4 * h / (1 + np.exp(x - t))
+
+    y = fall(tm, height) + 5.0 - quenching * (x - start)
+    if second_tm is not None:
+        y = y + fall(second_tm, second_height)
+    if noise:
+        y = y + np.random.default_rng(seed).normal(0, noise, x.size)
+    return Curve(x.tolist(), y.tolist())
