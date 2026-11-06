@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -335,3 +336,50 @@ def test_wizard_opens_for_a_folder_with_one_unknown_file(win, tmp_path):
     win._run_wizard = lambda rows: seen.append(rows[0]) or ColumnMapping(well="Pos", target="Gene", cq="Ct")
     assert win.add_run(tmp_path)
     assert seen == [["Pos", "Gene", "Ct"]] and len(win.editor.project.runs) == 1
+
+
+def test_program_with_curves_exits_cleanly(tmp_path):
+    """Everything is destroyed in the real order: a crash here would hit users on every exit."""
+    import subprocess
+    import sys
+
+    script = tmp_path / "run.py"
+    script.write_text(
+        """
+import sys
+from pathlib import Path
+from matplotlib.backend_bases import MouseButton, MouseEvent
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication
+from qpcr_core.config import AppConfig
+from tests.curve_factory import logistic
+from tests.test_curve_pipeline import _project
+import ui.main_window as mw
+
+mw.save_config = lambda c: None
+app = QApplication([])
+w = mw.MainWindow(AppConfig())
+w.editor.set_project(_project([("R1", f"A{i + 1}", f"s{i}", "T", "unknown", None, logistic(20 + i)) for i in range(6)]))
+w.recalculate_now()
+w.show()
+
+def poke():
+    v = w.curves
+    v.canvas.draw()
+    x, y = v.ax.transData.transform((22, 0.2))
+    MouseEvent("motion_notify_event", v.canvas, x, y)._process()
+    MouseEvent("button_press_event", v.canvas, x, y, button=MouseButton.LEFT)._process()
+    w.plate.select_coords(["A2"])
+    w.editor.mark_saved(Path("x"))
+    QTimer.singleShot(50, w.close)
+    QTimer.singleShot(100, app.quit)
+
+QTimer.singleShot(100, poke)
+sys.exit(app.exec())
+""",
+        encoding="utf-8",
+    )
+    env = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONPATH": str(ROOT)}
+    done = subprocess.run([sys.executable, str(script)], cwd=ROOT, env=env, capture_output=True, text=True, timeout=120)
+    assert done.returncode == 0, done.stderr[-2000:]
+

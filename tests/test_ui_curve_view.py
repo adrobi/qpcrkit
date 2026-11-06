@@ -26,6 +26,18 @@ def _rows():
     return rows
 
 
+@pytest.fixture(autouse=True)
+def no_leftover_views(qapp):
+    """A canvas that outlives QApplication crashes the interpreter on exit."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    yield
+    for widget in qapp.topLevelWidgets():
+        if isinstance(widget, CurveView):
+            widget.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
 @pytest.fixture
 def view(qapp):
     p = _project(_rows())
