@@ -1,4 +1,4 @@
-"""Side panels: project tree and settings editor."""
+"""The list of runs in the navigation, and the settings form of the analysis dialog."""
 
 from __future__ import annotations
 
@@ -20,9 +20,10 @@ from PySide6.QtWidgets import (
 )
 
 from i18n import tr
-from qpcr_core.editing import set_target_kind, update_settings
+from qpcr_core.editing import update_settings
 from qpcr_core.models import Project
 from ui.editor import ProjectEditor
+from ui.theme import DARK, LIGHT, icon
 
 
 def _set_efficiency(project: Project, target: str, mode: str, manual: float | None) -> None:
@@ -33,11 +34,10 @@ def _set_efficiency(project: Project, target: str, mode: str, manual: float | No
 
 
 class ProjectTree(QWidget):
-    """Runs/targets/groups overview plus import actions."""
+    """The runs of the project, with a button to add one."""
 
     run_selected = Signal(str)
     add_run_requested = Signal()
-    import_layout_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -45,59 +45,44 @@ class ProjectTree(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        title = QLabel(tr("ui.runs"))
+        title.setObjectName("dim")
+        layout.addWidget(title)
 
         self.tree = QTreeWidget(self)
         self.tree.setHeaderHidden(True)
         self.tree.setColumnCount(1)
+        self.tree.setRootIsDecorated(False)
+        self.tree.setTextElideMode(Qt.TextElideMode.ElideMiddle)
         layout.addWidget(self.tree, 1)
 
         self.add_run_button = QPushButton(tr("ui.add_run"), self)
-        self.import_layout_button = QPushButton(tr("ui.import_layout"), self)
         layout.addWidget(self.add_run_button)
-        layout.addWidget(self.import_layout_button)
 
         self.tree.itemClicked.connect(self._on_item_clicked)
         self.add_run_button.clicked.connect(lambda: self.add_run_requested.emit())
-        self.import_layout_button.clicked.connect(lambda: self.import_layout_requested.emit())
 
     def refresh(self, project: Project) -> None:
-        """Rebuild the tree from *project*."""
+        """Rebuild the list from *project*."""
         self.tree.clear()
         self._run_items.clear()
-
-        runs = QTreeWidgetItem([tr("ui.runs")])
-        targets = QTreeWidgetItem([tr("ui.targets")])
-        groups = QTreeWidgetItem([tr("ui.groups")])
-        for node in (runs, targets, groups):
-            self.tree.addTopLevelItem(node)
-
         for run in project.runs:
-            label = (
-                f"{run.id} · {run.name} "
-                f"({run.instrument}, {tr('ui.wells_n', n=len(run.wells))})"
-            )
-            item = QTreeWidgetItem([label])
+            item = QTreeWidgetItem([run.name or run.id])
+            item.setToolTip(0, f"{run.id} · {run.name} ({run.instrument}, {tr('ui.wells_n', n=len(run.wells))})")
             item.setData(0, Qt.ItemDataRole.UserRole, run.id)
-            runs.addChild(item)
+            self.tree.addTopLevelItem(item)
             self._run_items[run.id] = item
 
-        for name in sorted(project.targets):
-            target = project.targets[name]
-            targets.addChild(QTreeWidgetItem([name + (" ★" if target.kind == "reference" else "")]))
+    def set_current_run(self, run_id: str | None) -> None:
+        item = self._run_items.get(run_id) if run_id else None
+        if item is not None:
+            self.tree.setCurrentItem(item)
 
-        counts: dict[str, int] = {}
-        for sample in project.samples.values():
-            group = (sample.group or "").strip()
-            if group:
-                counts[group] = counts.get(group, 0) + 1
-        for group in sorted(counts):
-            groups.addChild(QTreeWidgetItem([f"{group} ({counts[group]})"]))
-
-        for node in (runs, targets, groups):
-            node.setExpanded(True)
+    def set_theme(self, dark: bool) -> None:
+        self.add_run_button.setIcon(icon("plus", (DARK if dark else LIGHT)["dim"]))
 
     def run_item(self, run_id: str) -> QTreeWidgetItem | None:
-        """Return the tree item for *run_id*, if present."""
+        """Return the list item for *run_id*, if present."""
         return self._run_items.get(run_id)
 
     def _on_item_clicked(self, item: QTreeWidgetItem, _column: int) -> None:
@@ -107,13 +92,12 @@ class ProjectTree(QWidget):
 
 
 class SettingsPanel(QWidget):
-    """Scrollable form with references, control group, efficiency and QC settings."""
+    """Scrollable form: efficiency per target, test, QC thresholds. Lives in the analysis dialog."""
 
     def __init__(self, editor: ProjectEditor) -> None:
         super().__init__()
         self.editor = editor
         self._target_names: tuple[str, ...] | None = None
-        self.ref_checks: dict[str, QCheckBox] = {}
         self.eff_mode: dict[str, QComboBox] = {}
         self.eff_value: dict[str, QDoubleSpinBox] = {}
         self.spins: dict[str, QDoubleSpinBox] = {}
@@ -128,16 +112,6 @@ class SettingsPanel(QWidget):
         self._form = QFormLayout(content)
         self._form.setContentsMargins(8, 8, 8, 8)
         scroll.setWidget(content)
-
-        self._add_title(tr("ui.references"))
-        self._ref_box = QWidget()
-        self._ref_layout = QVBoxLayout(self._ref_box)
-        self._ref_layout.setContentsMargins(0, 0, 0, 0)
-        self._form.addRow(self._ref_box)
-
-        self._add_title(tr("ui.control_group"))
-        self.control_combo = QComboBox()
-        self._form.addRow(self.control_combo)
 
         self._add_title(tr("ui.efficiency"))
         self._eff_box = QWidget()
@@ -171,7 +145,6 @@ class SettingsPanel(QWidget):
         self.pool_check = QCheckBox(tr("ui.pool_std_runs"))
         self._form.addRow(self.pool_check)
 
-        self.control_combo.currentIndexChanged.connect(self._control_changed)
         self.test_combo.currentIndexChanged.connect(self._test_changed)
         for name, spin in self.spins.items():
             spin.valueChanged.connect(lambda value, n=name: self._spin_changed(n, value))
@@ -188,15 +161,6 @@ class SettingsPanel(QWidget):
             self._rebuild_target_widgets(names)
             self._target_names = names
 
-        groups = sorted({s.group.strip() for s in project.samples.values() if (s.group or "").strip()})
-        with QSignalBlocker(self.control_combo):
-            self.control_combo.clear()
-            self.control_combo.addItem(tr("ui.none"), "")
-            for group in groups:
-                self.control_combo.addItem(group, group)
-            index = self.control_combo.findData(project.settings.control_group or "")
-            self.control_combo.setCurrentIndex(index if index >= 0 else 0)
-
         with QSignalBlocker(self.test_combo):
             index = self.test_combo.findData(project.settings.test)
             self.test_combo.setCurrentIndex(index if index >= 0 else 0)
@@ -207,11 +171,6 @@ class SettingsPanel(QWidget):
 
         with QSignalBlocker(self.pool_check):
             self.pool_check.setChecked(bool(project.settings.pool_std_runs))
-
-        for name, check in self.ref_checks.items():
-            target = project.targets.get(name)
-            with QSignalBlocker(check):
-                check.setChecked(bool(target and target.kind == "reference"))
 
         for name, combo in self.eff_mode.items():
             target = project.targets.get(name)
@@ -233,14 +192,6 @@ class SettingsPanel(QWidget):
         self._form.addRow(label)
 
     def _rebuild_target_widgets(self, names: tuple[str, ...]) -> None:
-        _clear_layout(self._ref_layout)
-        self.ref_checks = {}
-        for name in names:
-            check = QCheckBox(name)
-            check.toggled.connect(lambda checked, n=name: self._ref_toggled(n, checked))
-            self._ref_layout.addWidget(check)
-            self.ref_checks[name] = check
-
         _clear_layout(self._eff_layout)
         self.eff_mode = {}
         self.eff_value = {}
@@ -268,17 +219,6 @@ class SettingsPanel(QWidget):
             self._eff_layout.addWidget(row)
             self.eff_mode[name] = mode
             self.eff_value[name] = value
-
-    def _ref_toggled(self, name: str, checked: bool) -> None:
-        kind = "reference" if checked else "target"
-        target = self.editor.project.targets.get(name)
-        if target is None or target.kind != kind:
-            self.editor.apply(set_target_kind, name, kind)
-
-    def _control_changed(self, _index: int) -> None:
-        value = self.control_combo.currentData() or ""
-        if value != (self.editor.project.settings.control_group or ""):
-            self.editor.apply(update_settings, control_group=value)
 
     def _test_changed(self, _index: int) -> None:
         value = self.test_combo.currentData() or "dunnett"

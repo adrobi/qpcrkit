@@ -53,6 +53,17 @@ EN: dict[str, str] = {
 
 EN.update(
     {
+        "ui.analysis_settings": "Analysis settings",
+        "ui.qc_count": "Errors: {errors}, warnings: {warnings}",
+        "ui.chip.reference": "Reference: {value}",
+        "ui.chip.control": "Control: {value}",
+        "ui.chip.not_set": "not set",
+        "ui.chip.no_targets": "No targets yet",
+        "ui.chip.no_groups": "Set sample groups first",
+    }
+)
+EN.update(
+    {
         "hint.no_target": "{count} wells have no target. Select them and set the target",
         "hint.no_sample": "{count} wells have no sample. Select them and set the sample",
         "hint.no_reference": "Choose a reference gene",

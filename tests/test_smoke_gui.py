@@ -5,33 +5,10 @@ import pytest
 from qpcr_core.config import AppConfig
 from qpcr_core.editing import set_target_kind, update_settings
 from qpcr_core.importers.generic_csv import ColumnMapping
+from ui.main_window import PAGE_NAMES
 
 ROOT = Path(__file__).resolve().parent.parent
 RUN1, RUN2 = ROOT / "examples" / "demo_run1.csv", ROOT / "examples" / "demo_run2.csv"
-
-
-@pytest.fixture
-def win(qapp):
-    from ui.main_window import MainWindow
-
-    w = MainWindow(AppConfig())
-    w.errors = []
-    w._show_error = w.errors.append
-    w.resize(1200, 800)
-    yield w
-    w.editor.mark_saved(Path("x"))  # no close prompt
-    w.close()
-    w.deleteLater()
-    qapp.processEvents()
-
-
-@pytest.fixture
-def demo(win):
-    assert win.add_run(RUN1) and win.add_run(RUN2)
-    win.editor.apply(set_target_kind, "GAPDH", "reference")
-    win.editor.apply(update_settings, control_group="Ctrl")
-    win.recalculate_now()
-    return win
 
 
 def test_entry_points():
@@ -46,8 +23,8 @@ def test_demo_renders_all_tabs_themes_languages(demo):
         demo.apply_theme(mode)
         for lang in ("en", "ru"):
             demo.set_language(lang)
-            for i in range(demo.tabs.count()):
-                demo.tabs.setCurrentIndex(i)
+            for name in PAGE_NAMES:
+                demo.go_to(name)
                 assert not demo.grab().isNull()
 
 
@@ -148,9 +125,9 @@ def test_exports(demo, tmp_path):
 
 
 def test_qc_locate(demo):
-    demo.tabs.setCurrentIndex(4)
+    demo.go_to("qc")
     demo.qc.locate.emit("R2", "B1")
-    assert demo.tabs.currentIndex() == 0
+    assert demo.current_page() == "plate"
     assert demo.current_run_id == "R2" and demo.plate.selected_coords() == ["B1"]
 
 

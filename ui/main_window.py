@@ -1,4 +1,4 @@
-"""Main window: project tree | tabs (plate, data, standards, expression, QC) | settings."""
+"""Main window: top bar, navigation with runs, hint line, and the pages of the workspace."""
 
 from __future__ import annotations
 
@@ -18,8 +18,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
-    QSplitter,
-    QTabWidget,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -42,6 +41,7 @@ from qpcr_core.editing import (
 )
 from qpcr_core.export import export_csv, export_html, export_xlsx
 from qpcr_core.figures import expression_figure, safe_name, save_figure, std_curve_figure
+from qpcr_core.hints import next_hint
 from qpcr_core.importers.base import UnknownFormatError, UnsupportedFileError, add_report
 from qpcr_core.importers.detect import import_files
 from qpcr_core.importers.generic_csv import ColumnMapping
@@ -52,15 +52,17 @@ from qpcr_core.models import ROLES, Project
 from qpcr_core.pipeline import Results, analyze
 from qpcr_core.sessions import SessionError, load_project
 from qpcr_core.sessions import save_project as write_project
+from ui.analysis_dialog import AnalysisDialog
 from ui.csv_wizard import CsvWizard
 from ui.data_table import DataTable
 from ui.editor import ProjectEditor
 from ui.plate_view import PlateView
 from ui.result_tabs import ExpressionTab, QcTab, StdCurveTab
-from ui.side_panels import ProjectTree, SettingsPanel
+from ui.shell import PAGES, HintBar, NavRail, TopBar
 from ui.theme import app_icon, app_qss, resolve_dark, system_is_dark
 
 RECALC_DELAY_MS = 300
+PAGE_NAMES = tuple(name for name, _ in PAGES)
 _qt_translator: QTranslator | None = None
 
 
@@ -106,6 +108,7 @@ class MainWindow(QMainWindow):
         self.last_import_note = ""
         self._timer = QTimer(self, singleShot=True, interval=RECALC_DELAY_MS)
         self._timer.timeout.connect(self.recalculate_now)
+        self.analysis: AnalysisDialog | None = None
         self.editor.changed.connect(self._on_project_changed)
         self.resize(1400, 860)
         self._build_ui()
@@ -117,10 +120,14 @@ class MainWindow(QMainWindow):
 
     def _build_ui(self) -> None:
         """(Re)build every widget; also used for a language switch."""
-        self.tree = ProjectTree()
+        self.nav = NavRail()
+        self.nav.page_selected.connect(self.go_to)
+        self.tree = self.nav.tree
         self.tree.run_selected.connect(self.select_run)
         self.tree.add_run_requested.connect(self._add_run_dialog)
-        self.tree.import_layout_requested.connect(self._import_layout_dialog)
+        self.top_bar = TopBar(self.editor)
+        self.top_bar.settings_requested.connect(self._open_settings)
+        self.hint_bar = HintBar()
 
         self.plate = PlateView()
         self.plate.selection_changed.connect(self._update_selection_label)
@@ -130,22 +137,40 @@ class MainWindow(QMainWindow):
         self.expr = ExpressionTab(self.editor)
         self.qc = QcTab()
         self.qc.locate.connect(self.locate)
-        self.settings = SettingsPanel(self.editor)
+        if self.analysis is not None:
+            self.analysis.dispose()
+        self.analysis = AnalysisDialog(self.editor, self)
 
-        self.tabs = QTabWidget()
-        self.tabs.addTab(self._plate_page(), tr("tab.plate"))
-        self.tabs.addTab(self.data, tr("tab.data"))
-        self.tabs.addTab(self.std, tr("tab.std"))
-        self.tabs.addTab(self.expr, tr("tab.expr"))
-        self.tabs.addTab(self.qc, tr("tab.qc"))
+        self.pages = QStackedWidget()
+        self._page_widgets = {
+            "plate": self._plate_page(),
+            "data": self.data,
+            "std": self.std,
+            "expr": self.expr,
+            "qc": self.qc,
+        }
+        for name in PAGE_NAMES:
+            self.pages.addWidget(self._page_widgets[name])
 
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        for widget, stretch in ((self.tree, 1), (self.tabs, 4), (self.settings, 1)):
-            splitter.addWidget(widget)
-            splitter.setStretchFactor(splitter.count() - 1, stretch)
-        splitter.setSizes([240, 900, 280])
+        work = QWidget()
+        work_layout = QVBoxLayout(work)
+        work_layout.setContentsMargins(10, 8, 10, 4)
+        work_layout.addWidget(self.hint_bar)
+        work_layout.addWidget(self.pages, 1)
+        body = QHBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
+        body.addWidget(self.nav)
+        body.addWidget(work, 1)
+        root = QWidget()
+        root_layout = QVBoxLayout(root)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+        root_layout.addWidget(self.top_bar)
+        root_layout.addLayout(body, 1)
+
         old = self.centralWidget()
-        self.setCentralWidget(splitter)
+        self.setCentralWidget(root)
         if old is not None:
             old.deleteLater()
         self._build_menus()
@@ -206,6 +231,8 @@ class MainWindow(QMainWindow):
         self.undo_action = self._action(edit_menu, "act.undo", self.editor.undo, QKeySequence.StandardKey.Undo)
         self.redo_action = self._action(edit_menu, "act.redo", self.editor.redo, QKeySequence.StandardKey.Redo)
         self._action(edit_menu, "act.paste_map", self._paste_plate_map_from_clipboard)
+        edit_menu.addSeparator()
+        self._action(edit_menu, "ui.analysis_settings", self._open_settings)
 
         view_menu = mb.addMenu(tr("menu.view"))
         themes = QActionGroup(self)
@@ -240,6 +267,9 @@ class MainWindow(QMainWindow):
         if self.current_run_id not in {r.id for r in project.runs}:
             self.current_run_id = project.runs[0].id if project.runs else None
         self.tree.refresh(project)
+        self.tree.set_current_run(self.current_run_id)
+        self.top_bar.refresh(project, self.editor.path)
+        self.hint_bar.set_hint(next_hint(project))
         self._show_run(keep_selection=True)
         name = self.editor.path.name if self.editor.path else tr("ui.untitled")
         self.setWindowTitle(f"qpcrkit — {name}[*]")
@@ -266,6 +296,7 @@ class MainWindow(QMainWindow):
         self.results = results
         for tab in (self.std, self.expr, self.qc):
             tab.set_results(project, results, self.dark)
+        self.nav.set_qc_count(len(results.flags_by_severity("error")), len(results.flags_by_severity("warning")))
         if not project.runs:
             self.statusBar().showMessage(tr("ui.no_run"))
         else:
@@ -279,10 +310,22 @@ class MainWindow(QMainWindow):
 
     def select_run(self, run_id: str) -> None:
         self.current_run_id = run_id
+        self.tree.set_current_run(run_id)
         self._show_run()
 
+    def go_to(self, name: str) -> None:
+        self.pages.setCurrentWidget(self._page_widgets[name])
+        self.nav.set_page(name)
+
+    def current_page(self) -> str:
+        current = self.pages.currentWidget()
+        return next(n for n, w in self._page_widgets.items() if w is current)
+
+    def _open_settings(self) -> None:
+        self.analysis.open_settings()
+
     def locate(self, run_id: str, coord: str) -> None:
-        self.tabs.setCurrentIndex(0)
+        self.go_to("plate")
         self.select_run(run_id)
         self.plate.select_coords([coord])
 
@@ -528,6 +571,8 @@ class MainWindow(QMainWindow):
         if app is not None and app.styleSheet() != app_qss(dark):  # re-setting repolishes every widget
             app.setStyleSheet(app_qss(dark))
         self.plate.set_theme(dark)
+        self.nav.set_theme(dark)
+        self.top_bar.set_theme(dark)
         if self.results is not None:
             for tab in (self.std, self.expr, self.qc):
                 tab.set_results(self.editor.project, self.results, dark)
@@ -543,11 +588,14 @@ class MainWindow(QMainWindow):
 
     def retranslate_ui(self) -> None:
         """Rebuild widgets with the new language; the project and results stay."""
-        tab = self.tabs.currentIndex()
+        page, coords = self.current_page(), self.plate.selected_coords()
         self._build_ui()
-        self.tabs.setCurrentIndex(tab)
+        self.go_to(page)
         self.plate.set_theme(self.dark)
+        self.nav.set_theme(self.dark)
+        self.top_bar.set_theme(self.dark)
         self._on_project_changed()
+        self.plate.select_coords(coords)
         self.recalculate_now()
 
     def closeEvent(self, event: QCloseEvent) -> None:

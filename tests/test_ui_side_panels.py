@@ -11,20 +11,6 @@ def _panel():
     return e, SettingsPanel(e)
 
 
-def test_reference_checkbox(qapp):
-    e, s = _panel()
-    s.ref_checks["GAPDH"].setChecked(True)
-    assert e.project.targets["GAPDH"].kind == "reference"
-    s.ref_checks["GAPDH"].setChecked(False)
-    assert e.project.targets["GAPDH"].kind == "target"
-
-
-def test_control_group(qapp):
-    e, s = _panel()
-    s.control_combo.setCurrentIndex(s.control_combo.findData("LPS"))
-    assert e.project.settings.control_group == "LPS"
-
-
 def test_threshold_and_test(qapp):
     e, s = _panel()
     s.spins["rep_sd_max"].setValue(0.5)
@@ -45,9 +31,9 @@ def test_efficiency_mode(qapp):
 
 def test_refresh_after_undo_keeps_widgets_in_sync(qapp):
     e, s = _panel()
-    s.ref_checks["GAPDH"].setChecked(True)
+    s.eff_mode["IL6"].setCurrentIndex(s.eff_mode["IL6"].findData("ideal"))
     e.undo()
-    assert s.ref_checks["GAPDH"].isChecked() is False
+    assert s.eff_mode["IL6"].currentData() == "stdcurve"
 
 
 def test_project_tree(qapp):

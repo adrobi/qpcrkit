@@ -136,6 +136,17 @@ def current_language() -> str:
 
 RU.update(
     {
+        "ui.analysis_settings": "Настройки анализа",
+        "ui.qc_count": "Ошибок: {errors}, предупреждений: {warnings}",
+        "ui.chip.reference": "Референс: {value}",
+        "ui.chip.control": "Контроль: {value}",
+        "ui.chip.not_set": "не выбран",
+        "ui.chip.no_targets": "Мишеней пока нет",
+        "ui.chip.no_groups": "Сначала задайте группы образцов",
+    }
+)
+RU.update(
+    {
         "hint.no_target": "Лунок без мишени: {count}. Выделите их и задайте мишень",
         "hint.no_sample": "Лунок без образца: {count}. Выделите их и задайте образец",
         "hint.no_reference": "Выберите референсный ген",
