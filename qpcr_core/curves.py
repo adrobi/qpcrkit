@@ -10,6 +10,7 @@ from scipy.signal import savgol_filter
 from .models import Curve
 
 _MIN_POINTS = 5
+USABLE_EFFICIENCY = (0.5, 1.5)  # outside this a curve is broken (e.g. swapped quantities), not just poor
 _SKIP = 2  # the first cycles carry lamp and mixing artefacts
 _MIN_LINE_POINTS = 6  # fewer points cannot tell a drift from the start of the exponent
 _LOCAL_LINE_POINTS = 10
@@ -79,6 +80,7 @@ def _baseline_window(curve: Curve) -> tuple[int, int]:
         if y[end - 1] <= y[end - 3] or (y[end - 2 : end] - np.polyval(line, x[end - 2 : end])).min() <= limit:
             break  # not rising here, or back on the line
         end -= 1
+    end = max(end - 2, _SKIP + _MIN_LINE_POINTS)  # the signal is about as large as the noise where the check stops
     return _trim_decay(x, y, end, limit), end
 
 
@@ -171,3 +173,59 @@ def cq_at(curve: Curve, threshold: float) -> float | None:
             part = (threshold - y[i - 1]) / (y[i] - y[i - 1])
         return float(x[i - 1] + part * (x[i] - x[i - 1]))
     return None
+
+
+def efficiency_window(curves: list[Curve]) -> tuple[float, float] | None:
+    """One band of signal for a target, as in LinRegPCR: from above the noise to where the exponent starts to slow."""
+    growing = [c for c in curves if has_amplification(c)]
+    tops = []
+    for c in growing:
+        i = _sdm_index(np.asarray(c.y, dtype=float))
+        if i is not None:
+            tops.append(c.y[i])
+    if not tops:
+        return None
+    upper = float(np.median(tops))
+    lower = max(upper / 32, 4 * float(np.median([baseline_noise(c) for c in growing])))
+    return (lower, upper) if lower < upper else None
+
+
+def _fit_log(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
+    logy = np.log10(y)
+    slope, intercept = np.polyfit(x, logy, 1)
+    total = float(np.sum((logy - logy.mean()) ** 2))
+    r2 = 1 - float(np.sum((logy - (slope * x + intercept)) ** 2)) / total if total else 0.0
+    return float(10**slope - 1), r2
+
+
+def well_efficiency(curve: Curve, window: tuple[float, float]) -> tuple[float, float] | None:
+    """(E, R²) over the longest unbroken run of points inside the band."""
+    x, y = np.asarray(curve.x, dtype=float), np.asarray(curve.y, dtype=float)
+    low, high = window
+    best: tuple[int, int] = (0, 0)
+    i = 0
+    while i < y.size:
+        if low <= y[i] <= high:
+            j = i
+            while j + 1 < y.size and low <= y[j + 1] <= high:
+                j += 1
+            if j - i + 1 > best[1] - best[0]:
+                best = (i, j + 1)
+            i = j + 1
+        else:
+            i += 1
+    start, end = best
+    if end - start < 3:
+        return None
+    if end - start == 3:  # a steep curve jumps across the band: one more point from below, if it holds the line
+        if start == 0 or y[start - 1] <= 5 * baseline_noise(curve):
+            return None
+        e, r2 = _fit_log(x[start - 1 : end], y[start - 1 : end])
+        return (e, r2) if r2 >= 0.99 else None
+    return _fit_log(x[start:end], y[start:end])
+
+
+def target_efficiency(results: list[tuple[float, float]], min_r2: float = 0.99) -> float | None:
+    """Median over the wells that fit a line and give a believable efficiency."""
+    good = [e for e, r2 in results if r2 >= min_r2 and USABLE_EFFICIENCY[0] <= e <= USABLE_EFFICIENCY[1]]
+    return float(np.median(good)) if good else None

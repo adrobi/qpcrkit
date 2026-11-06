@@ -10,6 +10,7 @@ import math
 from dataclasses import dataclass
 from statistics import fmean
 
+from .curves import USABLE_EFFICIENCY
 from .flags import Flag
 from .models import Project
 from .stdcurve import StdCurve
@@ -26,7 +27,6 @@ class SampleRQ:
     log2_rq: float
 
 
-USABLE_EFFICIENCY = (0.5, 1.5)  # outside this a curve is broken (e.g. swapped quantities), not just poor
 
 
 def efficiencies_with_source(

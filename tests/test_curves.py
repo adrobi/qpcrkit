@@ -215,3 +215,55 @@ def test_decay_of_the_first_cycles_is_not_the_growth():
     c = Curve(grown.x, (np.array(grown.y) + decay + 20.0).tolist())
     assert cv._baseline_window(c)[1] > 20
     assert cv.cq_at(cv.subtract_baseline(c), 1.0) == pytest.approx(34, abs=0.3)
+
+
+# --- efficiency ---
+
+
+@pytest.mark.parametrize("e", [0.80, 0.95, 1.05])
+def test_efficiency_of_clean_curves(e):
+    curves = _set([20, 24, 28], efficiency=e)
+    window = cv.efficiency_window(curves)
+    for c in curves:
+        got = cv.well_efficiency(c, window)
+        assert got is not None
+        assert got[0] == pytest.approx(e, abs=0.02)
+        assert got[1] > 0.99
+
+
+def test_efficiency_median_with_noise():
+    curves = _set([20, 21, 22, 23, 24, 25, 26, 27], noise=0.002)
+    window = cv.efficiency_window(curves)
+    results = [cv.well_efficiency(c, window) for c in curves]
+    assert cv.target_efficiency([r for r in results if r]) == pytest.approx(0.95, abs=0.05)
+
+
+def test_window_is_common_and_above_the_noise():
+    curves = _set([20, 30], noise=0.002)
+    low, high = cv.efficiency_window(curves)
+    assert 4 * 0.002 * 0.5 < low < high
+    assert high < 2.0
+
+
+def test_no_window_without_growth():
+    assert cv.efficiency_window([cv.subtract_baseline(flat(noise=0.002))]) is None
+    assert cv.efficiency_window([]) is None
+
+
+def test_too_few_points_in_the_window():
+    c = cv.subtract_baseline(logistic(20))
+    assert cv.well_efficiency(c, (5.0, 6.0)) is None
+
+
+def test_baseline_error_lowers_efficiency():
+    """A leftover background flattens the bottom of the band; this is why the baseline must be exact."""
+    good = cv.subtract_baseline(logistic(24))
+    shifted = Curve(good.x, [v + 0.02 for v in good.y])
+    window = cv.efficiency_window([good])
+    assert cv.well_efficiency(shifted, window)[0] < cv.well_efficiency(good, window)[0] - 0.02
+
+
+def test_target_efficiency_rejects_outliers():
+    assert cv.target_efficiency([(0.9, 0.999), (0.95, 0.999), (1.0, 0.999), (4.0, 0.999), (0.2, 0.8)]) == pytest.approx(0.95)
+    assert cv.target_efficiency([]) is None
+    assert cv.target_efficiency([(0.9, 0.5)]) is None
