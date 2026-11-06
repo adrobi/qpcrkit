@@ -247,3 +247,18 @@ def test_app_uses_fusion(no_app_stylesheet):
 
     setup_app(no_app_stylesheet)
     assert no_app_stylesheet.style().objectName().lower() == "fusion"
+
+
+def test_add_several_files_at_once(win):
+    assert win.add_run([RUN1, RUN2])
+    assert [r.id for r in win.editor.project.runs] == ["R1", "R2"]
+    assert win.editor.undo() and win.editor.project.runs == []
+    assert win.add_run(RUN1) and win.add_run(RUN2)
+    assert [r.id for r in win.editor.project.runs] == ["R1", "R2"]
+
+
+def test_binary_file_message(win, tmp_path):
+    p = tmp_path / "x.pcrd"
+    p.write_bytes(b"PK\x03\x04\x00\x00")
+    assert win.add_run(p) is False
+    assert win.errors and "x.pcrd" in win.errors[-1]

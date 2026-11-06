@@ -36,19 +36,21 @@ def _inspect(args: argparse.Namespace) -> int:
 
 
 def _new(args: argparse.Namespace) -> int:
-    from qpcr_core.importers.base import UnknownFormatError, add_report
-    from qpcr_core.importers.detect import import_file
+    from qpcr_core.importers.base import UnknownFormatError, UnsupportedFileError, add_report
+    from qpcr_core.importers.detect import import_files
     from qpcr_core.importers.platekit import apply_layout, read_instrument_layout, read_platekit_json
     from qpcr_core.models import Project, Target
     from qpcr_core.sessions import save_project
 
     project = Project()
-    for i, path in enumerate(args.files, start=1):
-        try:
-            add_report(project, import_file(path, f"R{i}"))
-        except UnknownFormatError:
-            print(tr("cli.unknown_format", path=path), file=sys.stderr)
-            return 2
+    try:
+        for report in import_files(args.files):
+            add_report(project, report)
+            for note in report.notes:
+                print(f"  {note}")
+    except (UnknownFormatError, UnsupportedFileError) as exc:
+        print(tr("cli.unknown_format", path=exc), file=sys.stderr)
+        return 2
     if args.layout:
         reader = read_platekit_json if args.layout.endswith(".json") else read_instrument_layout
         layout = reader(args.layout)
@@ -134,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=_inspect)
 
     p = sub.add_parser("new", help="create a project from instrument exports")
-    p.add_argument("files", nargs="+")
+    p.add_argument("files", nargs="+", help="instrument exports or folders")
     p.add_argument("--layout", help=".platekit.json or an instrument plate layout CSV")
     p.add_argument("--ref", action="append", default=[], help="reference gene (repeatable)")
     p.add_argument("--control", help="control group name")

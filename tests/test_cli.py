@@ -77,3 +77,15 @@ def test_gui_launch(monkeypatch):
     assert main(["gui"]) == 0
     assert main(["gui", "x.qpcrkit.json"]) == 0
     assert calls == [None, None, Path("x.qpcrkit.json")]
+
+
+def test_new_accepts_a_folder(tmp_path):
+    src = ROOT / "tests" / "data" / "real"
+    folder = tmp_path / "plate"
+    folder.mkdir()
+    for p in src.glob("2016-09-04 gapdh*"):
+        (folder / p.name).write_bytes(p.read_bytes())
+    out = tmp_path / "x.qpcrkit.json"
+    assert main(["new", str(folder), "-o", str(out)]) == 0
+    r = load_project(out).runs[0].wells["A1"].reactions[0]
+    assert r.amplification is not None

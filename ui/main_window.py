@@ -30,8 +30,8 @@ from qpcr_core.config import AppConfig, load_config, save_config
 from qpcr_core.editing import assign_sample, set_excluded, set_group, set_quantity, set_role
 from qpcr_core.export import export_csv, export_html, export_xlsx
 from qpcr_core.figures import expression_figure, save_figure, std_curve_figure
-from qpcr_core.importers.base import UnknownFormatError, add_report
-from qpcr_core.importers.detect import import_file
+from qpcr_core.importers.base import UnknownFormatError, UnsupportedFileError, add_report
+from qpcr_core.importers.detect import import_files
 from qpcr_core.importers.generic_csv import ColumnMapping
 from qpcr_core.importers.platekit import apply_layout, read_instrument_layout, read_platekit_json
 from qpcr_core.importers.textio import parse_number, read_rows
@@ -67,6 +67,11 @@ def install_qt_translator(lang: str) -> None:
     if translator.load(QLocale(lang), "qtbase", "_", path):
         app.installTranslator(translator)
         _qt_translator = translator
+
+
+def _add_reports(project: Project, reports: list) -> None:
+    for report in reports:
+        add_report(project, report)
 
 
 def _apply_layout_to_runs(project: Project, layout: dict, run_ids: list[str]) -> int:
@@ -364,24 +369,36 @@ class MainWindow(QMainWindow):
         self._remember(path)
         return True
 
-    def add_run(self, path: str | Path) -> bool:
-        ids = {r.id for r in self.editor.project.runs}
-        run_id = next(f"R{i}" for i in range(1, len(ids) + 2) if f"R{i}" not in ids)
+    def add_run(self, paths: str | Path | list) -> bool:
+        paths = paths if isinstance(paths, list) else [paths]
+        used = [int(r.id[1:]) for r in self.editor.project.runs if r.id[1:].isdigit()]
+        first = max(used, default=0) + 1
         try:
             try:
-                report = import_file(path, run_id)
+                reports = import_files(paths, first)
             except UnknownFormatError:
-                mapping = self._run_wizard(read_rows(path))
+                mapping = self._run_wizard(read_rows(paths[0]))
                 if mapping is None:
                     return False
-                report = import_file(path, run_id, mapping)
+                reports = import_files(paths, first, mapping)
+        except UnsupportedFileError as exc:
+            self._show_error(tr("ui.unsupported_file", name=exc))
+            return False
         except (OSError, ValueError) as exc:
             self._show_error(tr("ui.import_failed", error=exc))
             return False
-        self.current_run_id = run_id
-        self.editor.apply(add_report, report)
-        self.last_import_note = tr(
-            "ui.imported", imported=report.imported, total=report.total_rows, skipped=len(report.skipped)
+        self.current_run_id = reports[0].run.id
+        self.editor.apply(_add_reports, reports)
+        self.last_import_note = " ".join(
+            [
+                tr(
+                    "ui.imported",
+                    imported=sum(r.imported for r in reports),
+                    total=sum(r.total_rows for r in reports),
+                    skipped=sum(len(r.skipped) for r in reports),
+                )
+            ]
+            + [n for r in reports for n in r.notes]
         )
         self.statusBar().showMessage(self.last_import_note)
         return True
@@ -522,8 +539,9 @@ class MainWindow(QMainWindow):
             self.save_project(path)
 
     def _add_run_dialog(self) -> None:
-        if path := self._ask_open_path(tr("ui.filter_tables")):
-            self.add_run(path)
+        paths, _ = QFileDialog.getOpenFileNames(self, "", "", tr("ui.filter_tables"))
+        if paths:
+            self.add_run(paths)
 
     def _import_layout_dialog(self) -> None:
         if path := self._ask_open_path(tr("ui.filter_layout")):
