@@ -35,3 +35,8 @@ def test_roles_quantities_missing_ct():
 def test_no_section_title_uses_default_target():
     rows = [["No.", "Colour", "Name", "Type", "Ct"], ["1", "", "S", "Unknown", "20"]]
     assert rotorgene.parse(rows, "x", "R1").run.wells["1"].reactions[0].target == "Target1"
+
+
+def test_given_conc_with_thousands():
+    rows = [["No.", "Colour", "Name", "Type", "Ct", "Given Conc (copies)"], ["1", "", "S", "Standard", "20", "1,000.5"]]
+    assert rotorgene.parse(rows, "x", "R1").run.wells["1"].reactions[0].quantity == 1000.5

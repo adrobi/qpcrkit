@@ -6,7 +6,7 @@ import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 
-ROLES = ("unknown", "ntc", "std", "irc", "pos")
+ROLES = ("unknown", "ntc", "nrt", "std", "irc", "pos")
 
 # (rows, cols) for grid plates; None = Rotor-Gene rotor, positions "1".."N"
 PLATE_FORMATS: dict[int, tuple[int, int] | None] = {

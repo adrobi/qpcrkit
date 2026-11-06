@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from ..models import Reaction, Run, coord_from_index
 from .base import ImportReport, ReportBuilder, map_role, normalize_coord
-from .textio import parse_cq, parse_number
+from .textio import parse_cq
 
 
 @dataclass
@@ -31,7 +31,12 @@ class ColumnMapping:
 
 
 def parse(
-    rows: list[list[str]], mapping: ColumnMapping, source: str, run_id: str, plate_format: int = 96
+    rows: list[list[str]],
+    mapping: ColumnMapping,
+    source: str,
+    run_id: str,
+    plate_format: int = 96,
+    delimiter: str | None = None,
 ) -> ImportReport:
     header = [c.strip() for c in rows[mapping.header_row]]
     idx: dict[str, int | None] = {}
@@ -45,6 +50,10 @@ def parse(
             raise ValueError(f"Column not found: {name}")
 
     b = ReportBuilder(Run(id=run_id, name=source, source_file=source, instrument="generic", plate_format=plate_format))
+    q = idx["quantity"]
+    read_quantity = b.number_reader(
+        [r[q] for r in rows[mapping.header_row + 1 :] if q is not None and q < len(r)], mapping.quantity or "", delimiter
+    )
     for n, row in enumerate(rows[mapping.header_row + 1 :], start=mapping.header_row + 2):
 
         def get(field: str) -> str:
@@ -69,7 +78,7 @@ def parse(
                 target=get("target"),
                 role=role,
                 cq=parse_cq(get("cq")),
-                quantity=parse_number(get("quantity")) if role == "std" else None,
+                quantity=read_quantity(get("quantity")) if role == "std" else None,
             ),
             group=get("group"),
         )

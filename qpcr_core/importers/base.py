@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from ..models import Project, Reaction, Run, Sample, Well, format_coord, parse_coord
+from .textio import UnsupportedFileError, detect_number_style, parse_number  # noqa: F401
 
 
 @dataclass
@@ -14,6 +16,9 @@ class ImportReport:
     total_rows: int = 0
     imported: int = 0
     skipped: list[tuple[int, str]] = field(default_factory=list)  # (1-based row number, reason)
+    notes: list[str] = field(default_factory=list)  # things the user should know about this import
+    suggested_refs: list[str] = field(default_factory=list)  # reference targets named by the file
+    suggested_calibrator: str = ""  # reference sample named by the file
 
 
 class UnknownFormatError(Exception):
@@ -24,7 +29,9 @@ def map_role(text: str) -> str:
     t = text.strip().lower()
     if t.startswith(("std", "standard")):
         return "std"
-    if t.startswith(("ntc", "neg", "nrt", "negative")):
+    if t.startswith(("nrt", "no rt", "no reverse", "-rt")):
+        return "nrt"
+    if t.startswith(("ntc", "neg", "negative")):
         return "ntc"
     if t.startswith("pos"):
         return "pos"
@@ -63,6 +70,18 @@ class ReportBuilder:
 
     def skip(self, row_number: int, reason: str) -> None:
         self.report.skipped.append((row_number, reason))
+
+    def note(self, text: str) -> None:
+        if text not in self.report.notes:
+            self.report.notes.append(text)
+
+    def number_reader(self, cells: list[str], name: str, delimiter: str | None) -> Callable[[str], float | None]:
+        """A parser for one column: what a comma means is decided from the whole column."""
+        style, ambiguous = detect_number_style(cells, delimiter)
+        if ambiguous:
+            sample = next(c for c in cells if "," in c)
+            self.note(f"{name}: {sample!r} was read as {parse_number(sample, style):g} (comma as thousands)")
+        return lambda s: parse_number(s, style)
 
     def add(
         self,

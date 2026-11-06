@@ -51,7 +51,7 @@ EN.update(
         "ui.col.excluded": "Excluded",
         "ui.filter": "Filter…",
         "ui.paste_hint": "Ctrl+V: paste sample — group — biological replicate columns from Excel",
-        "ui.role.unknown": "sample", "ui.role.ntc": "NTC", "ui.role.std": "standard", "ui.role.irc": "calibrator (IRC)",
+        "ui.role.unknown": "sample", "ui.role.ntc": "NTC", "ui.role.nrt": "no-RT control", "ui.role.std": "standard", "ui.role.irc": "calibrator (IRC)",
         "ui.role.pos": "positive control",
     }
 )

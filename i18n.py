@@ -134,7 +134,7 @@ RU.update(
         "ui.col.excluded": "Исключена",
         "ui.filter": "Фильтр…",
         "ui.paste_hint": "Ctrl+V: вставить из Excel столбцы «образец — группа — биол. реплика»",
-        "ui.role.unknown": "образец", "ui.role.ntc": "NTC", "ui.role.std": "стандарт", "ui.role.irc": "калибратор (IRC)",
+        "ui.role.unknown": "образец", "ui.role.ntc": "NTC", "ui.role.nrt": "контроль без ОТ", "ui.role.std": "стандарт", "ui.role.irc": "калибратор (IRC)",
         "ui.role.pos": "полож. контроль",
     }
 )

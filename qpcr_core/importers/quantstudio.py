@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ..models import Reaction, Run, coord_from_index
 from .base import ImportReport, ReportBuilder, column_index, map_role, normalize_coord
-from .textio import parse_cq, parse_number
+from .textio import parse_cq
 
 _CQ_HEADERS = ("ct", "cq", "cт")
 
@@ -30,7 +30,7 @@ def _plate_format(rows: list[list[str]]) -> int:
     return 96
 
 
-def parse(rows: list[list[str]], source: str, run_id: str) -> ImportReport:
+def parse(rows: list[list[str]], source: str, run_id: str, delimiter: str | None = None) -> ImportReport:
     h = _header(rows)
     if h is None:
         raise ValueError("Not a QuantStudio results table")
@@ -43,6 +43,7 @@ def parse(rows: list[list[str]], source: str, run_id: str) -> ImportReport:
         return row[i].strip() if i is not None and i < len(row) else ""
 
     b = ReportBuilder(Run(id=run_id, name=source, source_file=source, instrument="quantstudio", plate_format=fmt))
+    read_quantity = b.number_reader([get(r, "quantity") for r in rows[h + 1 :]], "Quantity", delimiter)
     for n, row in enumerate(rows[h + 1 :], start=h + 2):
         if row and row[0].startswith("["):  # next section, e.g. [Amplification Data]
             break
@@ -67,7 +68,7 @@ def parse(rows: list[list[str]], source: str, run_id: str) -> ImportReport:
                 fluor=get(row, "reporter"),
                 role=role,
                 cq=parse_cq(get(row, cq_col)),
-                quantity=parse_number(get(row, "quantity")) if role == "std" else None,
+                quantity=read_quantity(get(row, "quantity")) if role == "std" else None,
                 excluded=omitted,
                 exclude_reason="omitted in instrument" if omitted else "",
             ),

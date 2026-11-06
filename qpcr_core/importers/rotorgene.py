@@ -6,7 +6,7 @@ import re
 
 from ..models import Reaction, Run
 from .base import ImportReport, ReportBuilder, column_index, find_header, map_role
-from .textio import parse_cq, parse_number
+from .textio import parse_cq
 
 _SECTION_RE = re.compile(r"quantitation (?:data|information|results) for (.+)", re.IGNORECASE)
 
@@ -15,7 +15,7 @@ def sniff(rows: list[list[str]]) -> bool:
     return find_header(rows, "No.", "Name", "Type", "Ct") is not None
 
 
-def parse(rows: list[list[str]], source: str, run_id: str) -> ImportReport:
+def parse(rows: list[list[str]], source: str, run_id: str, delimiter: str | None = None) -> ImportReport:
     if not sniff(rows):
         raise ValueError("Not a Rotor-Gene quantitation table")
     b = ReportBuilder(Run(id=run_id, name=source, source_file=source, instrument="rotorgene", plate_format=72))
@@ -33,6 +33,9 @@ def parse(rows: list[list[str]], source: str, run_id: str) -> ImportReport:
         if {"no.", "name", "type", "ct"} <= lowered:
             col = column_index(row)
             conc_col = next((i for c, i in col.items() if c.startswith("given conc")), None)
+            read_quantity = b.number_reader(
+                [x[conc_col] for x in rows[n:] if conc_col is not None and conc_col < len(x)], "Given Conc", delimiter
+            )
             continue
         if col is None:
             continue
@@ -49,7 +52,7 @@ def parse(rows: list[list[str]], source: str, run_id: str) -> ImportReport:
         role = map_role(get("type"))
         quantity = None
         if role == "std" and conc_col is not None and conc_col < len(row):
-            quantity = parse_number(row[conc_col])
+            quantity = read_quantity(row[conc_col])
         b.add(
             str(int(pos)),
             get("name"),

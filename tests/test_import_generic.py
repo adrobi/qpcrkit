@@ -29,3 +29,9 @@ def test_missing_column_named(tmp_path):
 def test_mapping_round_trip():
     m = ColumnMapping(well="W", target="T", cq="C", quantity="Q", header_row=2)
     assert ColumnMapping.from_dict(m.to_dict()) == m
+
+
+def test_quantity_column_style():
+    rows = [["W", "G", "C", "K", "Q"], ["A1", "IL6", "20", "Std", "1,250.0"], ["A2", "IL6", "21", "Std", "2,500.0"]]
+    rep = parse(rows, ColumnMapping(well="W", target="G", cq="C", role="K", quantity="Q"), "g", "R1")
+    assert rep.run.wells["A2"].reactions[0].quantity == 2500.0
