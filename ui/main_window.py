@@ -45,6 +45,7 @@ from qpcr_core.figures import expression_figure, safe_name, save_figure, std_cur
 from qpcr_core.importers.base import UnknownFormatError, UnsupportedFileError, add_report
 from qpcr_core.importers.detect import import_files
 from qpcr_core.importers.generic_csv import ColumnMapping
+from qpcr_core.importers.grouping import group_files
 from qpcr_core.importers.platekit import apply_layout, read_instrument_layout, read_platekit_json
 from qpcr_core.importers.textio import parse_number, read_rows
 from qpcr_core.models import ROLES, Project
@@ -424,7 +425,7 @@ class MainWindow(QMainWindow):
             try:
                 reports = import_files(paths, first)
             except UnknownFormatError:
-                mapping = self._run_wizard(read_rows(paths[0]))
+                mapping = self._run_wizard(read_rows(group_files(paths)[0][0]))
                 if mapping is None:
                     return False
                 reports = import_files(paths, first, mapping)

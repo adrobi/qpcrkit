@@ -18,4 +18,7 @@ def section(text: str, version: str) -> str:
 
 if __name__ == "__main__":
     changelog = Path(__file__).resolve().parent.parent / "CHANGELOG.md"
-    print(section(changelog.read_text(encoding="utf-8"), sys.argv[1]))
+    text = section(changelog.read_text(encoding="utf-8"), sys.argv[1])
+    if not text:
+        sys.exit(f"CHANGELOG.md has no section for {sys.argv[1]}")
+    print(text)

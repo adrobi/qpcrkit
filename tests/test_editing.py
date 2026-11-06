@@ -213,3 +213,30 @@ def test_orphan_cleanup_undone_by_history():
     ed.set_target(p, "R2", ["A1"], "G")
     assert "SYBR" not in p.targets
     assert "SYBR" in h.undo(p).targets
+
+
+def test_rename_into_default_target_carries_settings():
+    p = _sybr()
+    ed.set_target(p, "R2", ["A1"], "GAPDH")
+    ed.set_target(p, "R1", ["A1"], "SYBR")
+    p.targets["SYBR"].efficiency_mode = "manual"
+    p.targets["SYBR"].efficiency_manual = 0.92
+    ed.rename_target_in_run(p, "R1", "SYBR", "GAPDH")
+    assert (p.targets["GAPDH"].efficiency_mode, p.targets["GAPDH"].efficiency_manual) == ("manual", 0.92)
+
+
+def test_prune_keeps_annotated_samples_and_calibrator():
+    p = _sybr()
+    ed.apply_sample_table(p, [["rep", "", "2"]])
+    p.samples["cal"] = ed.Sample("cal")
+    p.settings.calibrator_sample = "cal"
+    p.samples["junk"] = ed.Sample("junk")
+    p.prune_orphans()
+    assert {"rep", "cal"} <= set(p.samples) and "junk" not in p.samples
+
+
+def test_assign_sample_drops_the_old_name():
+    p = _p()
+    ed.assign_sample(p, "R1", ["A1", "A2"], "old")
+    ed.assign_sample(p, "R1", ["A1", "A2"], "new")
+    assert "old" not in p.samples and "new" in p.samples

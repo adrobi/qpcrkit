@@ -95,3 +95,29 @@ def test_import_file_takes_first_run():
     assert is_rdml(REAL / "stepone_std.rdml")
     rep = import_file(REAL / "BioRad_qPCR_melt.rdml", "R7")
     assert rep.run.id == "R7" and rep.run.instrument == "rdml"
+
+
+def _plate(fmt, ids):
+    reacts = "".join(f'<react id="{i}"><sample id="s"/><data><tar id="t"/><cq>20</cq></data></react>' for i in ids)
+    return f"""<rdml version="1.1"><sample id="s"><type>unkn</type></sample><target id="t"><type>toi</type></target>
+<experiment id="e"><run id="r">{fmt}{reacts}</run></experiment></rdml>"""
+
+
+def _format(rows, cols):
+    return f"<pcrFormat><rows>{rows}</rows><columns>{cols}</columns></pcrFormat>"
+
+
+def test_48_well_plate_uses_its_own_columns(tmp_path):
+    run = parse_rdml(_rdml(tmp_path, _plate(_format(6, 8), [9])))[0].run
+    assert list(run.wells) == ["B1"] and run.plate_format == 96
+
+
+def test_rotor_keeps_positions(tmp_path):
+    run = parse_rdml(_rdml(tmp_path, _plate(_format(1, 72), [13])))[0].run
+    assert list(run.wells) == ["13"] and run.plate_format == 72
+
+
+@pytest.mark.parametrize("ids,coord", [([120], "E24"), (["P24"], "P24")])
+def test_no_format_recognizes_384(tmp_path, ids, coord):
+    run = parse_rdml(_rdml(tmp_path, _plate("", ids)))[0].run
+    assert list(run.wells) == [coord] and run.plate_format == 384

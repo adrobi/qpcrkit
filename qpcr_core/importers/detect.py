@@ -75,6 +75,8 @@ def import_files(
                 report = _import_cfx_group(group, run_id)
                 if report is not None:
                     reports.append(report)
+                else:
+                    ignored.extend(p.name for p in group)
             else:
                 reports.append(import_file(path, run_id, mapping))
         except UnsupportedFileError:

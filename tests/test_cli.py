@@ -137,3 +137,20 @@ def test_changelog_section(tmp_path):
     assert mod.section(text, "1.1.0") == "### Added\n- New"
     assert mod.section(text, "v1.0.0") == "- Old"
     assert mod.section(text, "9.9.9") == ""
+
+
+def test_control_may_come_from_the_layout(tmp_path):
+    src = ROOT / "tests" / "data" / "real" / "cfx_maestro_example01.csv"
+    layout = ROOT / "tests" / "data" / "plan.platekit.json"
+    out = tmp_path / "x.qpcrkit.json"
+    assert main(["new", str(src), "--layout", str(layout), "--control", "Ctrl", "-o", str(out)]) == 0
+
+
+def test_missing_layout_is_a_message(tmp_path, capsys):
+    assert main(["new", str(RUN1), "--layout", str(tmp_path / "no.csv"), "-o", str(tmp_path / "x.json")]) == 2
+    assert "no.csv" in capsys.readouterr().err
+
+
+def test_changelog_script_fails_on_unknown_version():
+    out = subprocess.run([sys.executable, str(ROOT / "scripts" / "changelog_section.py"), "v9.9.9"], capture_output=True, text=True)
+    assert out.returncode == 1 and "9.9.9" in out.stderr

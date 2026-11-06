@@ -115,7 +115,7 @@ jobs:
         with:
           path: artifacts
       - name: Release notes from the changelog
-        run: python scripts/changelog_section.py "${GITHUB_REF_NAME}" > release_notes.md
+        run: python3 scripts/changelog_section.py "${GITHUB_REF_NAME}" > release_notes.md
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:

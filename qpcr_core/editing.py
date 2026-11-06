@@ -18,6 +18,7 @@ def assign_sample(project: Project, run_id: str, coords: list[str], sample: str 
         project.run(run_id).wells[c].sample = sample
     if sample:
         project.samples.setdefault(sample, Sample(sample))
+    project.prune_orphans()
 
 
 def set_role(project: Project, run_id: str, coords: list[str], role: str, target: str | None = None) -> None:
@@ -96,8 +97,12 @@ def rename_target_in_run(project: Project, run_id: str, old: str, new: str) -> N
     source = project.targets.get(old)
     if new not in project.targets:
         project.targets[new] = dataclasses.replace(source, name=new) if source else Target(new)
-    elif source and source.kind == "reference":
-        project.targets[new].kind = "reference"
+    elif source:
+        into = project.targets[new]
+        if source.kind == "reference":
+            into.kind = "reference"
+        if into.efficiency_mode == "stdcurve" and into.efficiency_manual is None:  # nothing set on it yet
+            into.efficiency_mode, into.efficiency_manual = source.efficiency_mode, source.efficiency_manual
     project.prune_orphans()
 
 

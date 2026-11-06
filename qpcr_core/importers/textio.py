@@ -13,6 +13,8 @@ _DELIMITERS = ("\t", ";", ",")
 _MISSING_CQ = {"undetermined", "n/a", "na", "nan", "no ct", "no cq", "—", "-", ""}
 _BINARY_SUFFIXES = {".pcrd", ".eds", ".xls", ".rex", ".zip"}
 _THOUSANDS_LOOK = re.compile(r"^[+-]?[1-9]\d{0,2},\d{3}$")
+_THOUSANDS_NUMBER = re.compile(r"^[+-]?[1-9]\d{0,2}(,\d{3})+([eE][+-]?\d+)?$")
+_PLAIN_DECIMAL = re.compile(r"^[+-]?\d+\.\d+([eE][+-]?\d+)?$")
 _NUMBER_LOOK = re.compile(r"^[+-]?[\d.,\s ]+([eE][+-]?\d+)?$")
 
 
@@ -122,17 +124,23 @@ def detect_number_style(cells: list[str], delimiter: str | None = None) -> tuple
             return ("thousands_comma" if c.rfind(".") > c.rfind(",") else "decimal_comma"), False
         if c.count(",") > 1:
             return "thousands_comma", False
-    if delimiter == ";" or not all(_THOUSANDS_LOOK.match(c) for c in with_comma):
+    if not all(_THOUSANDS_LOOK.match(c) for c in with_comma):
+        return "decimal_comma", False
+    if any(_PLAIN_DECIMAL.match(c.strip()) for c in cells):  # the same column uses a dot for decimals
+        return "thousands_comma", False
+    if delimiter == ";":
         return "decimal_comma", False
     return "thousands_comma", True
 
 
 def parse_number(s: str, style: str = "decimal_comma") -> float | None:
     s = s.strip().replace(" ", "").replace(" ", "")
-    if style == "thousands_comma":
+    if "," in s and "." in s:  # both present: the last one is the decimal separator
+        s = s.replace(",", "") if s.rfind(".") > s.rfind(",") else s.replace(".", "").replace(",", ".")
+    elif style == "thousands_comma" and _THOUSANDS_NUMBER.match(s):
         s = s.replace(",", "")
     elif "," in s:
-        s = s.replace(".", "").replace(",", ".")
+        s = s.replace(",", ".")
     if not s:
         return None
     try:

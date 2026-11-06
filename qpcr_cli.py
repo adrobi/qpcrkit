@@ -51,6 +51,11 @@ def _new(args: argparse.Namespace) -> int:
             add_report(project, report)
             for note in report.notes:
                 print(f"  {note}")
+        if args.layout:
+            reader = read_platekit_json if args.layout.endswith(".json") else read_instrument_layout
+            layout = reader(args.layout)
+            for run in project.runs:
+                apply_layout(project, run.id, layout)
     except (UnknownFormatError, UnsupportedFileError) as exc:
         print(tr("cli.unknown_format", path=exc), file=sys.stderr)
         return 2
@@ -65,16 +70,15 @@ def _new(args: argparse.Namespace) -> int:
     if args.control and args.control not in groups:
         print(tr("cli.bad_choice", name=args.control, options=", ".join(groups) or "—"), file=sys.stderr)
         return 2
-    if args.layout:
-        reader = read_platekit_json if args.layout.endswith(".json") else read_instrument_layout
-        layout = reader(args.layout)
-        for run in project.runs:
-            apply_layout(project, run.id, layout)
     for name in args.ref:
         project.targets[name].kind = "reference"
     if args.control:
         project.settings.control_group = args.control
-    save_project(project, args.output)
+    try:
+        save_project(project, args.output)
+    except OSError as exc:
+        print(tr("cli.file_error", error=exc), file=sys.stderr)
+        return 2
     print(tr("cli.saved", path=args.output))
     return 0
 

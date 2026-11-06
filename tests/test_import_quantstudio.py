@@ -63,3 +63,40 @@ def test_crt_header():
     rows = [["Well", "Sample Name", "Target Name", "Task", "CRT"], ["A1", "s", "t", "UNKNOWN", "20.0"]]
     assert quantstudio.sniff(rows)
     assert quantstudio.parse(rows, "x", "R1").run.wells["A1"].reactions[0].cq == 20.0
+
+
+RESULTS = [
+    ["Well", "Well Position", "Sample", "Target", "Task", "Cq", "Quantity"],
+    ["1", "A1", "Std", "IL6", "STANDARD", "20.0", "N/A"],
+    ["2", "A2", "Std", "IL6", "STANDARD", "23.3", "N/A"],
+]
+
+
+def test_quantity_placeholder_falls_back_to_other_sheet():
+    sheet = [["Well Position", "Target", "Task", "Quantity"], ["A01", "IL6", "STANDARD", "1000"], ["A02", "IL6", "STANDARD", "100"]]
+    rep = quantstudio.parse(RESULTS, "x", "R1", sheets={"Standard Curve Result": sheet})
+    assert rep.run.wells["A1"].reactions[0].quantity == 1000.0
+    assert rep.run.wells["A2"].reactions[0].quantity == 100.0
+
+
+def test_replicate_sheet_compares_numbers_not_text():
+    sheet = [["Sample", "Target", "Quantity"], ["Std", "IL6", "100"], ["Std", "IL6", "100.0"]]
+    rep = quantstudio.parse(RESULTS, "x", "R1", sheets={"Replicate Group Result": sheet})
+    assert rep.run.wells["A1"].reactions[0].quantity == 100.0
+
+
+def test_ambiguous_replicate_sheet_gives_no_quantity():
+    sheet = [["Sample", "Target", "Quantity"], ["Std", "IL6", "100"], ["Std", "IL6", "10"]]
+    rep = quantstudio.parse(RESULTS, "x", "R1", sheets={"Replicate Group Result": sheet})
+    assert rep.run.wells["A1"].reactions[0].quantity is None
+
+
+def test_footer_with_three_cells_is_not_a_skipped_row():
+    rows = [["Well", "Sample Name", "Target Name", "Task", "CT"], ["A1", "s", "t", "UNKNOWN", "20"], ["Analysis", "Type", "Single"]]
+    rep = quantstudio.parse(rows, "x", "R1")
+    assert rep.skipped == [] and rep.total_rows == 1
+
+
+def test_bad_coordinate_with_data_is_reported():
+    rows = [["Well", "Sample Name", "Target Name", "Task", "CT"], ["??", "s", "t", "UNKNOWN", "20"]]
+    assert len(quantstudio.parse(rows, "x", "R1").skipped) == 1

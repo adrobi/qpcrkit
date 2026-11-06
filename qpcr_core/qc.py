@@ -34,7 +34,7 @@ def check_reactions(project: Project) -> list[Flag]:
             if rxn.quantity is None:  # no level to group by
                 continue
             key = (run.id, rxn.target, "std", None, rxn.quantity)
-        elif not well.sample:  # unnamed wells are not replicates of each other
+        elif rxn.role == "unknown" and not well.sample:  # unnamed wells are not replicates of each other
             unnamed.add((run.id, well.coord))
             continue
         else:

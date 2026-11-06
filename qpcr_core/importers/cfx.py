@@ -81,7 +81,10 @@ def _wide_table(path: Path) -> dict[str, Curve]:
 
 
 def _dye(path: Path) -> str:
-    return path.stem.rsplit("_", 1)[-1] if "_" in path.stem else ""
+    for table in (AMPLIFICATION, MELT_RFU, MELT_DERIVATIVE):
+        if table in path.stem:
+            return path.stem.split(table, 1)[1].lstrip("_")
+    return ""
 
 
 def attach_curves(report: ImportReport, curve_files: list[Path]) -> None:
@@ -93,7 +96,9 @@ def attach_curves(report: ImportReport, curve_files: list[Path]) -> None:
             well = report.run.wells.get(coord)
             if well is None:
                 continue
-            match = [r for r in well.reactions if r.fluor == dye] or (well.reactions if len(well.reactions) == 1 else [])
+            match = [r for r in well.reactions if r.fluor == dye]
+            if not match and not dye and len(well.reactions) == 1:  # the file does not say which dye
+                match = well.reactions
             for r in match:
                 if AMPLIFICATION in path.name:
                     r.amplification, r.baseline_subtracted = curve, True
@@ -107,7 +112,7 @@ def report_from_curves(curve_files: list[Path], source: str, run_id: str) -> Imp
     """A run from curve tables alone: reactions exist, Cq comes later from our own calculation."""
     b = ReportBuilder(Run(id=run_id, name=source, source_file=source, instrument="cfx"))
     for path in curve_files:
-        dye = _dye(path)
+        dye = _dye(path) or "SYBR"
         for coord in _wide_table(path):
             well = b.report.run.wells.setdefault(coord, Well(coord))
             if not any(r.fluor == dye for r in well.reactions):

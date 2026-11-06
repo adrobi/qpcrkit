@@ -6,9 +6,10 @@ import os
 import re
 import xml.etree.ElementTree as ET
 import zipfile
+from collections.abc import Callable
 from pathlib import Path
 
-from ..models import Curve, Reaction, Run, Sample, coord_from_index
+from ..models import PLATE_FORMATS, Curve, Reaction, Run, coord_from_index, format_coord, parse_coord
 from .base import ImportReport, ReportBuilder, normalize_coord
 from .textio import parse_cq, parse_number
 
@@ -57,6 +58,29 @@ def _target_name(target_id: str, dye: str) -> str:
     return left if _GUID.match(right) else right
 
 
+def _plate_layout(ids: list[str], rows: float | None, cols: float | None) -> tuple[int, Callable[[str], str]]:
+    """The plate format and how reaction ids map to wells."""
+    if rows and cols:
+        r, c = int(rows), int(cols)
+        if r == 1 or c == 1:  # a rotor has positions, not rows
+            size = r * c
+            return (size if size in PLATE_FORMATS and PLATE_FORMATS[size] is None else 72), lambda i: str(int(i))
+        plate = 384 if r * c > 96 else 96
+        return plate, lambda i: format_coord((int(i) - 1) // c, (int(i) - 1) % c) if i.isdigit() else normalize_coord(i)
+
+    def beyond_96(i: str) -> bool:
+        if i.isdigit():
+            return int(i) > 96
+        try:
+            row, col = parse_coord(i)
+        except ValueError:
+            return False
+        return row > 7 or col > 11
+
+    plate = 384 if len(ids) > 96 or any(beyond_96(i) for i in ids) else 96
+    return plate, lambda i: coord_from_index(int(i), plate) if i.isdigit() else normalize_coord(i)
+
+
 def _curve(points: list[ET.Element], x_tag: str, ns: str) -> Curve | None:
     xy = []
     for p in points:
@@ -99,7 +123,7 @@ def parse_rdml(path: str | os.PathLike, first_run_index: int = 1) -> list[Import
         fmt_el = run.find(ns + "pcrFormat")
         rows = parse_number(fmt_el.findtext(ns + "rows") or "") if fmt_el is not None else None
         cols = parse_number(fmt_el.findtext(ns + "columns") or "") if fmt_el is not None else None
-        plate = 384 if (rows and cols and rows * cols > 96) or (not rows and len(reacts) > 96) else 96
+        plate, to_coord = _plate_layout([x.get("id", "").strip() for x in reacts], rows, cols)
         run_id = f"R{first_run_index + i}"
         name = f"{path.stem} · {run.get('id', run_id)}"
         b = ReportBuilder(Run(id=run_id, name=name, source_file=path.name, instrument="rdml", plate_format=plate))
@@ -110,7 +134,7 @@ def parse_rdml(path: str | os.PathLike, first_run_index: int = 1) -> list[Import
             for data in react.findall(ns + "data"):
                 b.row()
                 try:
-                    coord = coord_from_index(int(rid), plate) if rid.isdigit() else normalize_coord(rid)
+                    coord = to_coord(rid)
                 except ValueError:
                     b.skip(0, f"bad reaction id {rid!r}")
                     continue

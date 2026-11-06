@@ -350,3 +350,11 @@ def test_same_language_does_not_rebuild(win, monkeypatch):
     monkeypatch.setattr(win, "_build_ui", lambda: calls.append(1))
     win.set_language(i18n.current_language())
     assert calls == []
+
+
+def test_wizard_opens_for_a_folder_with_one_unknown_file(win, tmp_path):
+    (tmp_path / "g.csv").write_text("Pos,Gene,Ct\nA1,IL6,20\n", encoding="utf-8")
+    seen = []
+    win._run_wizard = lambda rows: seen.append(rows[0]) or ColumnMapping(well="Pos", target="Gene", cq="Ct")
+    assert win.add_run(tmp_path)
+    assert seen == [["Pos", "Gene", "Ct"]] and len(win.editor.project.runs) == 1

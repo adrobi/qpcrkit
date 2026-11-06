@@ -91,3 +91,32 @@ def test_only_binary_or_only_unknown_raise(tmp_path):
 def test_several_runs_numbered_from_index():
     reports = import_files([REAL / "BioRad_qPCR_melt.rdml"], first_run_index=3)
     assert [r.run.id for r in reports] == ["R3", "R4"]
+
+
+CQ_HEADER = "Well,Fluor,Target,Content,Sample,Cq\n"
+
+
+def _amp(path, value):
+    path.write_text(f"Cycle,A1\n1,{value}\n2,{value}\n", encoding="utf-8")
+
+
+def test_other_channel_does_not_overwrite_the_only_reaction(tmp_path):
+    (tmp_path / "r -  Quantification Cq Results.csv").write_text(CQ_HEADER + "A01,FAM,,Unkn,s,20\n", encoding="utf-8")
+    _amp(tmp_path / "r -  Quantification Amplification Results_FAM.csv", 1)
+    _amp(tmp_path / "r -  Quantification Amplification Results_HEX.csv", 9)
+    r = import_files([tmp_path])[0].run.wells["A1"].reactions[0]
+    assert r.amplification.y[0] == 1.0
+
+
+def test_file_without_dye_suffix_goes_to_the_only_reaction(tmp_path):
+    (tmp_path / "2026_11_r -  Quantification Cq Results.csv").write_text(CQ_HEADER + "A01,SYBR,,Unkn,s,20\n", encoding="utf-8")
+    _amp(tmp_path / "2026_11_r -  Quantification Amplification Results.csv", 3)
+    r = import_files([tmp_path])[0].run.wells["A1"].reactions[0]
+    assert r.amplification.y[0] == 3.0
+
+
+def test_group_without_tables_is_reported(tmp_path):
+    cq = next(p for p in WENDY if "Cq Results" in p.name)
+    (tmp_path / cq.name).write_bytes(cq.read_bytes())
+    (tmp_path / "other_Run Information.csv").write_text("Run,x\n", encoding="utf-8")
+    assert "other_Run Information.csv" in " ".join(import_files([tmp_path])[0].notes)

@@ -124,3 +124,19 @@ def test_read_sheets(tmp_path):
     t = tmp_path / "a.txt"
     t.write_text("q\tw\n", encoding="utf-8")
     assert read_sheets(t) == {"": [["q", "w"]]}
+
+
+def test_both_separators_decide_by_their_order():
+    assert parse_number("1,250.0") == 1250.0
+    assert parse_number("1.250,5", "thousands_comma") == 1250.5
+
+
+def test_thousands_style_keeps_real_decimals():
+    assert parse_number("0,5", "thousands_comma") == 0.5
+    assert parse_number("23,45", "thousands_comma") == 23.45
+    assert parse_number("1,250", "thousands_comma") == 1250.0
+
+
+@pytest.mark.parametrize("delim", [None, ";"])
+def test_plain_decimals_settle_the_comma(delim):
+    assert detect_number_style(["1,000", "500", "12.5"], delim) == ("thousands_comma", False)

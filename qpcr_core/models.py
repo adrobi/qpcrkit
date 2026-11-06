@@ -141,14 +141,18 @@ class Project:
         raise KeyError(run_id)
 
     def prune_orphans(self) -> None:
-        """Drop targets no reaction uses, and unnamed-group samples no well uses.
+        """Drop targets no reaction uses, and samples no well uses.
 
-        A sample with a group is the user's data: its well may be named later.
+        A sample that carries annotations is the user's data: its well may be named later.
         """
         used_targets = {r.target for _, _, r in self.iter_reactions()}
         self.targets = {k: v for k, v in self.targets.items() if k in used_targets}
         used_samples = {w.sample for run in self.runs for w in run.wells.values()}
-        self.samples = {k: v for k, v in self.samples.items() if k in used_samples or v.group}
+        self.samples = {
+            k: v
+            for k, v in self.samples.items()
+            if k in used_samples or v.group or v.bio_replicate or k == self.settings.calibrator_sample
+        }
 
     def unassigned_targets(self) -> list[tuple[str, str]]:
         """Wells whose target is empty or just the dye's name: (run_id, coord)."""

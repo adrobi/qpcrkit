@@ -91,27 +91,34 @@ def _cell(row: list[str], i: int | None) -> str:
     return row[i].strip() if i is not None and i < len(row) else ""
 
 
-def _quantities(sheets: dict[str, list[list[str]]] | None) -> tuple[dict, dict]:
+def _quantities(sheets: dict[str, list[list[str]]] | None, fmt: int) -> tuple[dict, dict]:
     """Design & Analysis keeps quantities on other sheets: by (coord, target) and (sample, target)."""
     by_well: dict[tuple[str, str], str] = {}
     by_group: dict[tuple[str, str], str] = {}
     if not sheets:
         return by_well, by_group
-    found = _table(sheets.get("Standard Curve Result", []), "well position", "target", "quantity", "task")
+    found = _table(sheets.get("Standard Curve Result", []), "well position|well", "target name|target", "quantity", "task")
     if found:
         data, col = found
+        well, target = _pick(col, "well position|well"), _pick(col, "target name|target")
         for r in data:
-            if _cell(r, col["task"]).upper() == "STANDARD":
-                by_well[(_cell(r, col["well position"]), _cell(r, col["target"]))] = _cell(r, col["quantity"])
-    found = _table(sheets.get("Replicate Group Result", []), "sample", "target", "quantity")
+            if _cell(r, col["task"]).upper() != "STANDARD":
+                continue
+            try:
+                by_well[(_coord(_cell(r, well), fmt), _cell(r, target))] = _cell(r, col["quantity"])
+            except ValueError:
+                continue
+    found = _table(sheets.get("Replicate Group Result", []), "sample name|sample", "target name|target", "quantity")
     if found:
         data, col = found
-        seen: dict[tuple[str, str], set[str]] = defaultdict(set)
+        sample, target = _pick(col, "sample name|sample"), _pick(col, "target name|target")
+        seen: dict[tuple[str, str], dict[float, str]] = defaultdict(dict)
         for r in data:
             value = _cell(r, col["quantity"])
-            if value:
-                seen[(_cell(r, col["sample"]), _cell(r, col["target"]))].add(value)
-        by_group = {k: next(iter(v)) for k, v in seen.items() if len(v) == 1}  # ambiguous pairs stay empty
+            number = parse_number(value)
+            if number is not None:
+                seen[(_cell(r, sample), _cell(r, target))][number] = value
+        by_group = {k: next(iter(v.values())) for k, v in seen.items() if len(v) == 1}  # ambiguous pairs stay empty
     return by_well, by_group
 
 
@@ -122,6 +129,7 @@ def _attach_curves(
     y_names: str,
     field: str,
     fmt: int,
+    delimiter: str | None = None,
 ) -> None:
     """Long tables: one row per well, target and cycle or temperature."""
     if not table:
@@ -129,7 +137,9 @@ def _attach_curves(
     data, col = table
     well, target = _pick(col, "well position|well"), _pick(col, "target name|target")
     xc, yc = _pick(col, x_names), _pick(col, y_names)
-    style = detect_number_style([_cell(r, yc) for r in data[:2000]])[0]
+    style, ambiguous = detect_number_style([_cell(r, yc) for r in data[:2000]], delimiter)
+    if ambiguous:
+        b.note(f"{field}: comma read as thousands in the curve values")
     points: dict[tuple[str, str], list[tuple[float, float]]] = defaultdict(list)
     for r in data:
         try:
@@ -174,7 +184,7 @@ def parse(
         return _cell(row, _pick(col, name))
 
     b = ReportBuilder(Run(id=run_id, name=source, source_file=source, instrument="quantstudio", plate_format=fmt))
-    by_well, by_group = _quantities(sheets)
+    by_well, by_group = _quantities(sheets, fmt)
     table = rows[h + 1 :]
     table = table[: next((i for i, r in enumerate(table) if r and r[0].startswith("[")), len(table))]
     q_cells = [get(r, "quantity") for r in table] + list(by_well.values()) + list(by_group.values())
@@ -186,7 +196,7 @@ def parse(
         try:
             coord = _coord(pos, fmt)
         except ValueError:
-            if sum(bool(c) for c in row) <= 2:  # a footer line, not a data row
+            if not get(row, cq_col) and sum(bool(c) for c in row) <= 3:  # a footer line, not a data row
                 _apply_meta(b.report, [row])
             else:
                 b.row()
@@ -202,9 +212,9 @@ def parse(
         sample = get(row, "sample name|sample")
         quantity = None
         if role == "std":
-            quantity = read_quantity(
-                get(row, "quantity") or by_well.get((pos, target)) or by_group.get((sample, target), "")
-            )
+            quantity = read_quantity(get(row, "quantity"))  # may be a placeholder such as N/A
+            if quantity is None:
+                quantity = read_quantity(by_well.get((coord, target)) or by_group.get((sample, target), ""))
         b.add(
             coord,
             sample,
@@ -227,6 +237,6 @@ def parse(
         amp_rows = _section(rows, "Amplification Data")
         melt_rows = _section(rows, "Melt Curve Raw Data")
     cycle = "cycle|cycle number"
-    _attach_curves(b, _table(amp_rows, cycle, "rn"), cycle, "rn", "amplification", fmt)
-    _attach_curves(b, _table(melt_rows, "temperature", "fluorescence"), "temperature", "fluorescence", "melt", fmt)
+    _attach_curves(b, _table(amp_rows, cycle, "rn"), cycle, "rn", "amplification", fmt, delimiter)
+    _attach_curves(b, _table(melt_rows, "temperature", "fluorescence"), "temperature", "fluorescence", "melt", fmt, delimiter)
     return b.report
