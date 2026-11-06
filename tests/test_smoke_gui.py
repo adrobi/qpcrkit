@@ -288,10 +288,10 @@ def test_group_without_samples_explains(win):
     assert win.statusBar().currentMessage() == tr_key("ui.group_needs_sample")
 
 
-def tr_key(key):
+def tr_key(key, **params):
     from i18n import tr
 
-    return tr(key)
+    return tr(key, **params)
 
 
 def test_suggestions_applied_after_confirmation(win):
@@ -383,3 +383,59 @@ sys.exit(app.exec())
     done = subprocess.run([sys.executable, str(script)], cwd=ROOT, env=env, capture_output=True, text=True, timeout=120)
     assert done.returncode == 0, done.stderr[-2000:]
 
+
+
+# --- the success criterion of the spec ---
+
+
+def test_cfx_user_goes_from_dropped_files_to_ddct(win):
+    """No targets and samples in the export: drop, mark up 96 wells, curves beside the plate, fold change with stats."""
+    from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
+    from PySide6.QtGui import QDropEvent
+
+    from qpcr_core.models import format_coord
+
+    files = sorted((Path(__file__).parent / "data" / "real").glob("2016-09-04*"))
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(f)) for f in files])
+    win.dropEvent(QDropEvent(QPointF(5, 5), Qt.DropAction.CopyAction, mime, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier))
+    assert not win.is_start_shown() and win.current_page() == "plate"
+    assert win.hint_bar.label.text() == tr_key("hint.no_target", count=96)
+    assert win.curves.line_count() == 96
+
+    # the left half of the plate is a reference, the right half a target
+    left = [format_coord(r, c) for r in range(8) for c in range(6)]
+    right = [format_coord(r, c) for r in range(8) for c in range(6, 12)]
+    for coords, target in ((left, "GAPDH"), (right, "IL6")):
+        win.plate.select_coords(coords)
+        win.selection.target_edit.setText(target)
+        win.selection.apply_button.click()
+    assert not win.editor.project.unassigned_targets()
+
+    # rows: three replicates of samples in two groups
+    for coords in (left, right):
+        by_group = {"Ctrl": [c for c in coords if c[0] in "ABCD"], "LPS": [c for c in coords if c[0] in "EFGH"]}
+        for group, wells in by_group.items():
+            for i in range(3):
+                part = wells[i::3]
+                win.plate.select_coords(part)
+                win.selection.sample_edit.setText(f"{group}-{i + 1}")
+                win.selection.group_edit.setText(group)
+                win.selection.apply_button.click()
+    assert win.hint_bar.label.text() == tr_key("hint.no_reference")
+
+    next(a for a in win.top_bar.ref_chip.menu().actions() if a.text() == "GAPDH").trigger()
+    assert win.hint_bar.label.text() == tr_key("hint.no_control")
+    next(a for a in win.top_bar.control_chip.menu().actions() if a.text() == "Ctrl").trigger()
+    assert win.hint_bar.isHidden()
+
+    win.recalculate_now()
+    assert {g.group for g in win.results.groups if g.target == "IL6"} == {"Ctrl", "LPS"}
+    assert [c for c in win.results.comparisons if c.target == "IL6"]
+    win.go_to("expr")
+    assert win.expr.save_button.isEnabled()
+    win.go_to("plate")
+    win.plate.select_coords(["A1"])
+    assert win.curves.selected_line_count() == 1
+    win.curves.target_combo.setCurrentIndex(win.curves.target_combo.findData("IL6"))
+    assert win.curves.threshold_line is not None

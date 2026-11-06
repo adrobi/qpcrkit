@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 
@@ -117,6 +118,7 @@ class MainWindow(QMainWindow):
         self.resize(1400, 860)
         self.setAcceptDrops(True)
         self._had_runs = False
+        self._shown_run_id: str | None = None
         self._build_ui()
         QGuiApplication.styleHints().colorSchemeChanged.connect(self._on_scheme_changed)
         self.apply_theme(self.config.theme, save=False)
@@ -302,7 +304,8 @@ class MainWindow(QMainWindow):
         self._timer.start()
 
     def _show_run(self, keep_selection: bool = False) -> None:
-        coords = self.plate.selected_coords() if keep_selection else []
+        coords = self.plate.selected_coords() if keep_selection and self.current_run_id == self._shown_run_id else []
+        self._shown_run_id = self.current_run_id
         run = self.editor.project.run(self.current_run_id) if self.current_run_id else None
         self.plate.set_run(run, self.editor.project)
         if coords:
@@ -366,7 +369,7 @@ class MainWindow(QMainWindow):
         project = self.editor.project
         run = project.run(self.current_run_id) if self.current_run_id else None
         coords = self.plate.selected_coords()
-        self.selection.set_selection(project, run, coords)
+        self.selection.set_selection(project, run, [c for c in coords if run and c in run.wells])
         self.curves.set_selection(coords)
 
     def _set_threshold(self, target: str, value: float | None) -> None:
@@ -377,10 +380,14 @@ class MainWindow(QMainWindow):
     def _exclude_std_point(self, run_id: str, coord: str, target: str) -> None:
         self.editor.apply(set_excluded, run_id, coord, target, True, tr("ui.excluded_on_curve"))
         self._one_time_note = tr("ui.excluded_note", coord=coord, target=target)
-        self.statusBar().showMessage(self._one_time_note)
+        self.recalculate_now()  # at once: until the point is gone, a second click would take it again
 
     def _save_expression_figure(self, target: str) -> None:
         """A new figure without the screen style: the file is white in any theme."""
+        if self.results is None or self._timer.isActive():
+            self.recalculate_now()
+        if self.results is None:
+            return
         path = self._ask_save_path(tr("ui.filter_figure"), f"expression_{safe_name(target)}.svg")
         if not path:
             return
@@ -396,8 +403,12 @@ class MainWindow(QMainWindow):
         self.plate.select_coords(coords)
 
     def _selection(self) -> tuple[str, list[str]] | None:
-        coords = self.plate.selected_coords()
-        return (self.current_run_id, coords) if self.current_run_id and coords else None
+        """The selected wells that exist: a plate is often not full, and its corner selects everything."""
+        if not self.current_run_id:
+            return None
+        wells = self.editor.project.run(self.current_run_id).wells
+        coords = [c for c in self.plate.selected_coords() if c in wells]
+        return (self.current_run_id, coords) if coords else None
 
     def apply_sample_to_selection(self, sample: str) -> None:
         if sel := self._selection():
@@ -425,6 +436,11 @@ class MainWindow(QMainWindow):
         role = self.selection.role_combo.currentData()
         qty_text = self.selection.quantity_edit.text().strip()
         quantity = parse_number(qty_text) if qty_text else None
+        if qty_text and (quantity is None or not math.isfinite(quantity) or quantity <= 0):
+            self.statusBar().showMessage(tr("ui.bad_quantity"))  # the typed text stays to be corrected
+            return
+        if not (target or sample or group or role or quantity is not None):
+            return  # nothing to do must not leave an undo step
 
         def edit(p: Project) -> None:
             if target:
@@ -488,9 +504,21 @@ class MainWindow(QMainWindow):
             return self.save_project()
         return answer == "discard"
 
+    def _forget_project(self) -> None:
+        """Nothing of the old project carries over to the next one."""
+        self.results = None
+        self.current_run_id = None
+        self.last_import_note = ""
+        self._one_time_note = ""
+        self.plate.select_coords([])
+        self.selection.clear_fields()
+        self.analysis.panel.set_results(None)
+        self.data.model.set_results(None)
+
     def new_project(self) -> bool:
         if not self._confirm_discard():
             return False
+        self._forget_project()
         self.editor.set_project(Project())
         self.recalculate_now()
         return True
@@ -503,7 +531,7 @@ class MainWindow(QMainWindow):
         except SessionError as exc:
             self._show_error(str(exc))
             return False
-        self.last_import_note = ""
+        self._forget_project()
         self.editor.set_project(project, Path(path))
         self._remember(path)
         self.recalculate_now()
@@ -518,7 +546,7 @@ class MainWindow(QMainWindow):
         except SessionError as exc:
             self._show_error(str(exc))
             return False
-        self.last_import_note = ""
+        self._forget_project()
         self.editor.set_project(project)
         self.recalculate_now()
         return True
@@ -556,8 +584,12 @@ class MainWindow(QMainWindow):
         try:
             try:
                 reports = import_files(paths, first)
-            except UnknownFormatError:
-                mapping = self._run_wizard(read_rows(group_files(paths)[0][0]))
+            except UnknownFormatError as exc:
+                groups = group_files(paths)
+                if len(groups) != 1 or len(groups[0]) != 1:  # an empty folder, or files of different layouts
+                    self._show_error(tr("ui.import_failed", error=exc))
+                    return False
+                mapping = self._run_wizard(read_rows(groups[0][0]))
                 if mapping is None:
                     return False
                 reports = import_files(paths, first, mapping)
@@ -686,8 +718,10 @@ class MainWindow(QMainWindow):
     def retranslate_ui(self) -> None:
         """Rebuild widgets with the new language; the project and results stay."""
         page, coords = self.current_page(), self.plate.selected_coords()
+        dialog_open, color_mode = self.analysis.isVisible(), self.plate.color_mode
         self._build_ui()
         self.go_to(page)
+        self.color_combo.setCurrentIndex(max(self.color_combo.findData(color_mode), 0))
         self.plate.set_theme(self.dark)
         self.start_page.set_theme(self.dark)
         self.curves.set_theme(self.dark)
@@ -696,9 +730,13 @@ class MainWindow(QMainWindow):
         self._on_project_changed()
         self.plate.select_coords(coords)
         self.recalculate_now()
+        if dialog_open:
+            self.analysis.open_settings()
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._confirm_discard():
+            self._timer.stop()
+            self.analysis.close()
             event.accept()
         else:
             event.ignore()

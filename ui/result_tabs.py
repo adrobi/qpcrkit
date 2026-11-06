@@ -151,7 +151,10 @@ class StdCurveTab(QWidget):
         self._canvas.mpl_canvas.mpl_connect("pick_event", self._on_pick)
 
     def _on_pick(self, event) -> None:
-        curve = self._curves[self._combo.currentIndex()][1]
+        index = self._combo.currentIndex()
+        if event.mouseevent.button != 1 or not 0 <= index < len(self._curves) or not len(event.ind):
+            return
+        curve = self._curves[index][1]
         point = curve.points[int(event.ind[0])]
         self.point_clicked.emit(point.run_id, point.coord, curve.target)
 

@@ -134,6 +134,7 @@ def tr(key: str, **kwargs) -> str:
 def current_language() -> str:
     return _lang
 
+RU.update({"ui.bad_quantity": "Количество должно быть положительным числом"})
 RU.update(
     {
         "ui.col.cq_calc": "Cq по кривой",

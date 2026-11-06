@@ -51,6 +51,7 @@ EN: dict[str, str] = {
     "sheet.params": "Analysis parameters",
 }
 
+EN.update({"ui.bad_quantity": "The quantity must be a positive number"})
 EN.update(
     {
         "ui.col.cq_calc": "Cq from curve",

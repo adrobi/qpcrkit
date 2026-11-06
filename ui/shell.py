@@ -79,6 +79,18 @@ class NavRail(QWidget):
         self.tree.set_theme(dark)
 
 
+def _menu_text(name: str) -> str:
+    """Qt takes a single & for a keyboard shortcut."""
+    return name.replace("&", "&&")
+
+
+def _clear_menu(menu: QMenu) -> None:
+    """Not menu.clear(): the refresh runs inside the signal of an action it would delete."""
+    for action in menu.actions():
+        menu.removeAction(action)
+        action.deleteLater()
+
+
 class TopBar(QWidget):
     settings_requested = Signal()
 
@@ -120,11 +132,11 @@ class TopBar(QWidget):
 
     def _refresh_references(self, project: Project) -> None:
         menu = self.ref_chip.menu()
-        menu.clear()
+        _clear_menu(menu)
         chosen = []
         for name in sorted(project.targets):
             is_ref = project.targets[name].kind == "reference"
-            action = QAction(name, menu, checkable=True, checked=is_ref)
+            action = QAction(_menu_text(name), menu, checkable=True, checked=is_ref)
             action.triggered.connect(lambda on, n=name: self.editor.apply(set_target_kind, n, "reference" if on else "target"))
             menu.addAction(action)
             if is_ref:
@@ -132,22 +144,22 @@ class TopBar(QWidget):
         if not project.targets:
             menu.addAction(QAction(tr("ui.chip.no_targets"), menu, enabled=False))
         value = ", ".join(chosen) if chosen else tr("ui.chip.not_set")
-        self.ref_chip.setText(tr("ui.chip.reference", value=value))
+        self.ref_chip.setText(tr("ui.chip.reference", value=_menu_text(value)))
         self._mark(self.ref_chip, not chosen)
 
     def _refresh_control(self, project: Project) -> None:
         s = project.settings
         menu = self.control_chip.menu()
-        menu.clear()
+        _clear_menu(menu)
         groups = sorted({x.group.strip() for x in project.samples.values() if (x.group or "").strip()})
         for group in groups:
-            action = QAction(group, menu, checkable=True, checked=group == s.control_group)
-            action.triggered.connect(lambda _on, g=group: self.editor.apply(update_settings, control_group=g))
+            action = QAction(_menu_text(group), menu, checkable=True, checked=group == s.control_group)
+            action.triggered.connect(lambda on, g=group: self.editor.apply(update_settings, control_group=g if on else ""))
             menu.addAction(action)
         if not groups:
             menu.addAction(QAction(tr("ui.chip.no_groups"), menu, enabled=False))
         value = s.control_group or s.calibrator_sample or tr("ui.chip.not_set")
-        self.control_chip.setText(tr("ui.chip.control", value=value))
+        self.control_chip.setText(tr("ui.chip.control", value=_menu_text(value)))
         self._mark(self.control_chip, not (s.control_group or s.calibrator_sample))
 
     @staticmethod

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -46,7 +47,7 @@ def fit_std_curves(project: Project, cq_of: CqFn) -> tuple[dict[tuple[str | None
     for run, well, rxn in project.iter_reactions():
         if rxn.role != "std" or rxn.excluded:
             continue
-        if not rxn.quantity or rxn.quantity <= 0:
+        if not rxn.quantity or not math.isfinite(rxn.quantity) or rxn.quantity <= 0:
             no_quantity[(run.id, rxn.target)].append(well.coord)
             continue
         key = (None if s.pool_std_runs else run.id, rxn.target)

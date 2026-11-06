@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from PySide6.QtCore import (
     QAbstractItemModel,
     QAbstractTableModel,
@@ -292,7 +294,7 @@ class ReactionModel(QAbstractTableModel):
                 quantity = parse_number(str(value))
             except (TypeError, ValueError):
                 return False
-            if quantity is None:
+            if quantity is None or not math.isfinite(quantity) or quantity <= 0:
                 return False
         self.editor.apply(
             set_quantity,

@@ -101,6 +101,8 @@ class CurveView(QWidget):
         width, height = self.figure.bbox.width, self.figure.bbox.height
         if width > 120 and height > 120:
             self.figure.subplots_adjust(left=66 / width, right=1 - 12 / width, bottom=44 / height, top=1 - 10 / height)
+            self._background = None
+            self._segments_px = None
 
     # --- data --------------------------------------------------------------------------------
 
@@ -169,6 +171,7 @@ class CurveView(QWidget):
 
     def _update_threshold(self) -> None:
         """A line only for one target on the graph: on several it would not say whose it is."""
+        dragging, dragged, dragged_target = self._drag_from, self.threshold_value(), self._threshold_target
         if self.threshold_line is not None:
             self.threshold_line.remove()
             self.threshold_line = None
@@ -188,6 +191,9 @@ class CurveView(QWidget):
             color = theme("dark" if self.dark else "light")["text"]
             # Drawn with the top layer, over the veil: dimming must not hide what can be dragged.
             self.threshold_line = self.ax.axhline(value, color=color, linestyle="--", linewidth=1.2, animated=True)
+            if dragging is not None and target == dragged_target:  # a delayed recalculation must not cut a drag
+                self._drag_from = dragging
+                self.threshold_line.set_ydata([dragged, dragged])
 
     def _near_threshold(self, event) -> bool:
         if self.threshold_line is None or event.inaxes is not self.ax:
@@ -329,6 +335,8 @@ class CurveView(QWidget):
             self._hover_timer.start()
 
     def _show_hover(self) -> None:
+        if not self.canvas.isVisible():
+            return
         coord = self.coord_at(*self._hover_pos) if self._hover_pos else None
         if coord is None:
             QToolTip.hideText()
