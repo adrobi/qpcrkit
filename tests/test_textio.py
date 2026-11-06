@@ -68,3 +68,59 @@ def test_parse_cq_missing(s):
 
 def test_parse_cq_value():
     assert parse_cq("23,45") == 23.45
+
+
+from qpcr_core.importers.textio import UnsupportedFileError, detect_number_style, read_sheets, read_table
+
+
+@pytest.mark.parametrize(
+    "cells,delim,expected",
+    [
+        (["10,000", "5,000", "2,500", "1,250", "0,625"], None, ("decimal_comma", False)),
+        (["1,250.000", "100,000,000.000"], None, ("thousands_comma", False)),
+        (["100,000,000"], None, ("thousands_comma", False)),
+        (["23,45"], None, ("decimal_comma", False)),
+        (["1,250", "2,500"], ";", ("decimal_comma", False)),
+        (["1,250", "2,500"], ",", ("thousands_comma", True)),
+        (["1.250,5"], None, ("decimal_comma", False)),
+        (["1000", "10", ""], None, ("decimal_comma", False)),
+    ],
+)
+def test_detect_number_style(cells, delim, expected):
+    assert detect_number_style(cells, delim) == expected
+
+
+def test_parse_number_styles():
+    assert parse_number("1,250.000", "thousands_comma") == 1250.0
+    assert parse_number("100,000,000", "thousands_comma") == 1e8
+    assert parse_number("1,250", "decimal_comma") == 1.25
+    assert parse_number("1.250,5", "decimal_comma") == 1250.5
+    assert parse_number("1 250,5") == 1250.5
+    assert parse_number("1\u00a0250,5") == 1250.5
+    assert parse_number("1,5e3") == 1500.0
+
+
+def test_binary_files_rejected(tmp_path):
+    p = tmp_path / "run.pcrd"
+    p.write_bytes(b"PK\x03\x04\x00\x00binary")
+    with pytest.raises(UnsupportedFileError, match="run.pcrd"):
+        read_rows(p)
+    q = tmp_path / "strange.csv"
+    q.write_bytes(b"a,b\x00,c\n")
+    with pytest.raises(UnsupportedFileError):
+        read_rows(q)
+
+
+def test_read_table_reports_delimiter(tmp_path):
+    p = tmp_path / "a.csv"
+    p.write_text("x;y\n1;2\n", encoding="utf-8")
+    assert read_table(p) == ([["x", "y"], ["1", "2"]], ";")
+
+
+def test_read_sheets(tmp_path):
+    p = tmp_path / "a.xlsx"
+    _xlsx(p, [("Results", [["Well"], ["A1"]]), ("Other", [["z"]])])
+    assert read_sheets(p) == {"Results": [["Well"], ["A1"]], "Other": [["z"]]}
+    t = tmp_path / "a.txt"
+    t.write_text("q\tw\n", encoding="utf-8")
+    assert read_sheets(t) == {"": [["q", "w"]]}
