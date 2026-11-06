@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 from pathlib import Path
 
 import matplotlib
@@ -14,6 +15,11 @@ from .stdcurve import StdCurve
 
 _FORMATS = {".svg": "svg", ".pdf": "pdf", ".png": "png"}
 BAR_COLOR = "#2563eb"
+
+
+def safe_name(name: str) -> str:
+    """A target name as part of a file name."""
+    return re.sub(r"[^\w.+-]+", "_", name, flags=re.UNICODE).strip("_")
 
 
 def significance_stars(p: float | None) -> str:

@@ -262,3 +262,91 @@ def test_binary_file_message(win, tmp_path):
     p.write_bytes(b"PK\x03\x04\x00\x00")
     assert win.add_run(p) is False
     assert win.errors and "x.pcrd" in win.errors[-1]
+
+
+REAL = ROOT / "tests" / "data" / "real"
+
+
+def _unnamed(win):
+    cq = next(REAL.glob("2016-09-04 gapdh*Cq Results*"))
+    assert win.add_run(cq)
+    return win
+
+
+def test_target_field_assigns_target(win):
+    _unnamed(win)
+    win.plate.select_coords(["A1", "A2"])
+    win.target_edit.setText("GAPDH")
+    win._apply_bar()
+    wells = win.editor.project.run("R1").wells
+    assert wells["A1"].reactions[0].target == "GAPDH" and wells["A3"].reactions[0].target == "SYBR"
+    assert win.editor.undo()
+    assert win.editor.project.run("R1").wells["A1"].reactions[0].target == "SYBR"
+
+
+def test_fill_series_from_selection(win):
+    _unnamed(win)
+    win.plate.select_coords(["A1", "A2", "A3", "A4"])
+    win.fill_series_selected("Ctrl-", 2)
+    wells = win.editor.project.run("R1").wells
+    assert [wells[c].sample for c in ("A1", "A2", "A3", "A4")] == ["Ctrl-1", "Ctrl-1", "Ctrl-2", "Ctrl-2"]
+
+
+def test_paste_plate_map(win):
+    _unnamed(win)
+    assert win.paste_plate_map("s1\ts2\n\ts3\n") == 3
+    wells = win.editor.project.run("R1").wells
+    assert (wells["A1"].sample, wells["A2"].sample, wells["B2"].sample) == ("s1", "s2", "s3")
+
+
+def test_group_without_samples_explains(win):
+    _unnamed(win)
+    win.plate.select_coords(["A1"])
+    win.group_edit.setText("Ctrl")
+    before = win.editor.dirty, len(win.editor.project.samples)
+    win.editor.mark_saved(Path("x"))
+    win._apply_bar()
+    assert not win.editor.dirty and len(win.editor.project.samples) == before[1]
+    assert win.statusBar().currentMessage() == tr_key("ui.group_needs_sample")
+
+
+def tr_key(key):
+    from i18n import tr
+
+    return tr(key)
+
+
+def test_suggestions_applied_after_confirmation(win):
+    asked = []
+    win._ask_suggestions = lambda refs, calibrator: asked.append((refs, calibrator)) or True
+    assert win.add_run(REAL / "appbio_quantstudio_example10.xlsx")
+    assert asked == [(["RefGene"], "Sample_1")]
+    p = win.editor.project
+    assert p.targets["RefGene"].kind == "reference" and p.settings.calibrator_sample == "Sample_1"
+
+
+def test_suggestions_can_be_declined(win):
+    win._ask_suggestions = lambda refs, calibrator: False
+    assert win.add_run(REAL / "appbio_quantstudio_example10.xlsx")
+    assert win.editor.project.targets["RefGene"].kind == "target"
+
+
+def test_notes_are_shown(win, tmp_path):
+    p = tmp_path / "en.csv"
+    p.write_text(
+        "Well,Fluor,Target,Content,Sample,Cq,Starting Quantity (SQ)\n"
+        'A01,SYBR,IL6,Std,s,20.5,"1,250"\nA02,SYBR,IL6,Std,s,21.5,"2,500"\n',
+        encoding="utf-8",
+    )
+    assert win.add_run(p)
+    assert "1,250" in win.statusBar().currentMessage()
+
+
+def test_same_language_does_not_rebuild(win, monkeypatch):
+    import i18n
+
+    win.set_language(i18n.current_language())
+    calls = []
+    monkeypatch.setattr(win, "_build_ui", lambda: calls.append(1))
+    win.set_language(i18n.current_language())
+    assert calls == []

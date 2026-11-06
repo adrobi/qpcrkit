@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
+    QInputDialog,
     QLineEdit,
     QMainWindow,
     QMessageBox,
@@ -27,9 +28,20 @@ import i18n
 import qpcr_core
 from i18n import tr
 from qpcr_core.config import AppConfig, load_config, save_config
-from qpcr_core.editing import assign_sample, set_excluded, set_group, set_quantity, set_role
+from qpcr_core.editing import (
+    apply_plate_map,
+    assign_sample,
+    fill_series,
+    set_excluded,
+    set_group,
+    set_quantity,
+    set_role,
+    set_target,
+    set_target_kind,
+    update_settings,
+)
 from qpcr_core.export import export_csv, export_html, export_xlsx
-from qpcr_core.figures import expression_figure, save_figure, std_curve_figure
+from qpcr_core.figures import expression_figure, safe_name, save_figure, std_curve_figure
 from qpcr_core.importers.base import UnknownFormatError, UnsupportedFileError, add_report
 from qpcr_core.importers.detect import import_files
 from qpcr_core.importers.generic_csv import ColumnMapping
@@ -142,6 +154,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(page)
         bar = QHBoxLayout()
         self.selection_label = QLabel()
+        self.target_edit = QLineEdit(placeholderText=tr("ui.target"))
         self.sample_edit = QLineEdit(placeholderText=tr("ui.col.sample"))
         self.group_edit = QLineEdit(placeholderText=tr("ui.col.group"))
         self.role_combo = QComboBox()
@@ -151,6 +164,8 @@ class MainWindow(QMainWindow):
         self.quantity_edit = QLineEdit(placeholderText=tr("ui.col.quantity"))
         apply_btn = QPushButton(tr("ui.apply"))
         apply_btn.clicked.connect(self._apply_bar)
+        series_btn = QPushButton(tr("ui.series"))
+        series_btn.clicked.connect(self._fill_series_dialog)
         exclude_btn = QPushButton(tr("ui.exclude"))
         exclude_btn.clicked.connect(lambda: self._set_selection_excluded(True))
         include_btn = QPushButton(tr("ui.include"))
@@ -159,8 +174,9 @@ class MainWindow(QMainWindow):
         self.color_combo.addItem(tr("ui.color.target"), "target")
         self.color_combo.addItem(tr("ui.color.role"), "role")
         self.color_combo.currentIndexChanged.connect(lambda: self.plate.set_color_mode(self.color_combo.currentData()))
-        for w in (self.selection_label, self.sample_edit, self.group_edit, self.role_combo, self.quantity_edit,
-                  apply_btn, exclude_btn, include_btn, QLabel(tr("ui.color_by")), self.color_combo):
+        for w in (self.selection_label, self.target_edit, self.sample_edit, self.group_edit, self.role_combo,
+                  self.quantity_edit, apply_btn, series_btn, exclude_btn, include_btn, QLabel(tr("ui.color_by")),
+                  self.color_combo):
             bar.addWidget(w)
         layout.addLayout(bar)
         layout.addWidget(self.plate, 1)
@@ -188,6 +204,7 @@ class MainWindow(QMainWindow):
         edit_menu = mb.addMenu(tr("menu.edit"))
         self.undo_action = self._action(edit_menu, "act.undo", self.editor.undo, QKeySequence.StandardKey.Undo)
         self.redo_action = self._action(edit_menu, "act.redo", self.editor.redo, QKeySequence.StandardKey.Redo)
+        self._action(edit_menu, "act.paste_map", self._paste_plate_map_from_clipboard)
 
         view_menu = mb.addMenu(tr("menu.view"))
         themes = QActionGroup(self)
@@ -294,12 +311,19 @@ class MainWindow(QMainWindow):
         if not (sel := self._selection()):
             return
         run_id, coords = sel
+        target = self.target_edit.text().strip()
         sample, group = self.sample_edit.text().strip(), self.group_edit.text().strip()
+        wells = self.editor.project.run(run_id).wells
+        if group and not sample and not any(wells[c].sample for c in coords):
+            self.statusBar().showMessage(tr("ui.group_needs_sample"))
+            return
         role = self.role_combo.currentData()
         qty_text = self.quantity_edit.text().strip()
         quantity = parse_number(qty_text) if qty_text else None
 
         def edit(p: Project) -> None:
+            if target:
+                set_target(p, run_id, coords, target)
             if sample:
                 assign_sample(p, run_id, coords, sample)
             if role:
@@ -311,6 +335,29 @@ class MainWindow(QMainWindow):
                     set_group(p, s, group)
 
         self.editor.apply(edit)
+
+    def fill_series_selected(self, prefix: str, replicates: int) -> None:
+        if sel := self._selection():
+            self.editor.apply(fill_series, sel[0], sel[1], prefix, 1, replicates)
+
+    def _fill_series_dialog(self) -> None:
+        if not self._selection():
+            return
+        prefix, ok = QInputDialog.getText(self, tr("ui.series"), tr("ui.series_prefix"), text="S")
+        if not ok or not prefix:
+            return
+        reps, ok = QInputDialog.getInt(self, tr("ui.series"), tr("ui.series_replicates"), 3, 1, 96)
+        if ok:
+            self.fill_series_selected(prefix, reps)
+
+    def paste_plate_map(self, text: str) -> int:
+        if not self.current_run_id:
+            return 0
+        rows = [line.split("\t") for line in text.splitlines()]
+        return int(self.editor.apply(apply_plate_map, self.current_run_id, rows))
+
+    def _paste_plate_map_from_clipboard(self) -> None:
+        self.statusBar().showMessage(tr("ui.map_pasted", n=self.paste_plate_map(QApplication.clipboard().text())))
 
     def _set_selection_excluded(self, excluded: bool) -> None:
         if sel := self._selection():
@@ -401,7 +448,24 @@ class MainWindow(QMainWindow):
             + [n for r in reports for n in r.notes]
         )
         self.statusBar().showMessage(self.last_import_note)
+        self._offer_suggestions(reports)
         return True
+
+    def _offer_suggestions(self, reports: list) -> None:
+        """The file may name its reference genes and calibrator; use them if the user agrees."""
+        project = self.editor.project
+        refs = [t for r in reports for t in r.suggested_refs if t in project.targets]
+        calibrator = next((r.suggested_calibrator for r in reports if r.suggested_calibrator in project.samples), "")
+        if not refs and not calibrator:
+            return
+        if self._ask_suggestions(refs, calibrator):
+            def apply(p: Project) -> None:
+                for t in refs:
+                    set_target_kind(p, t, "reference")
+                if calibrator:
+                    update_settings(p, calibrator_sample=calibrator)
+
+            self.editor.apply(apply)
 
     def import_layout(self, path: str | Path, run_id: str | None = None) -> int:
         try:
@@ -431,9 +495,9 @@ class MainWindow(QMainWindow):
                 out.mkdir(parents=True, exist_ok=True)
                 for target in sorted({g.target for g in results.groups}):
                     fig = expression_figure(results, target, error=project.settings.error_bar)
-                    save_figure(fig, out / f"expression_{target}.svg")
+                    save_figure(fig, out / f"expression_{safe_name(target)}.svg")
                 for (run_id, target), curve in results.std_curves.items():
-                    save_figure(std_curve_figure(curve), out / f"stdcurve_{target}_{run_id or 'pooled'}.svg")
+                    save_figure(std_curve_figure(curve), out / f"stdcurve_{safe_name(target)}_{run_id or 'pooled'}.svg")
             else:
                 raise ValueError(kind)
         except OSError as exc:
@@ -468,6 +532,8 @@ class MainWindow(QMainWindow):
                 tab.set_results(self.editor.project, self.results, dark)
 
     def set_language(self, lang: str) -> None:
+        if lang == i18n.current_language() and lang == self.config.language:
+            return
         i18n.set_language(lang)
         install_qt_translator(lang)
         self.config.language = lang
@@ -517,6 +583,10 @@ class MainWindow(QMainWindow):
     def _ask_save_path(self, file_filter: str, default: str) -> str | None:
         path, _ = QFileDialog.getSaveFileName(self, "", default, file_filter)
         return path or None
+
+    def _ask_suggestions(self, refs: list[str], calibrator: str) -> bool:
+        text = tr("ui.suggest_text", refs=", ".join(refs) or "—", calibrator=calibrator or "—")
+        return QMessageBox.question(self, "qpcrkit", text) == QMessageBox.StandardButton.Yes
 
     def _show_error(self, text: str) -> None:
         QMessageBox.critical(self, "qpcrkit", text)

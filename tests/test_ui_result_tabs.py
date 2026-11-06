@@ -68,3 +68,16 @@ def test_stdcurve_table_shows_lowest_detected(qapp):
     t = StdCurveTab()
     t.set_results(p, res, False)
     assert t._table_widget.item(0, 6).text() == "100"
+
+
+def test_stdcurve_keeps_selected_curve(qapp):
+    from tests.factories import make_project
+    from tests.test_stdcurve import _ideal_rows
+
+    p = make_project(_ideal_rows(target="A") + _ideal_rows(target="B"))
+    res = analyze(p)
+    t = StdCurveTab()
+    t.set_results(p, res, False)
+    t._combo.setCurrentIndex(1)
+    t.set_results(p, res, False)
+    assert t._combo.currentIndex() == 1

@@ -112,13 +112,14 @@ class StdCurveTab(QWidget):
                 ]
             )
 
+        previous = self._combo.currentText()
         blocker = QSignalBlocker(self._combo)
         self._combo.clear()
         for index, ((run_id, target), _curve) in enumerate(items):
             run_label = run_id or tr("ui.pooled")
             self._combo.addItem(f"{target} — {run_label}", index)
         if items:
-            self._combo.setCurrentIndex(0)
+            self._combo.setCurrentIndex(max(self._combo.findText(previous), 0))
         else:
             self._combo.setCurrentIndex(-1)
         blocker.unblock()

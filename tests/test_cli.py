@@ -89,3 +89,51 @@ def test_new_accepts_a_folder(tmp_path):
     assert main(["new", str(folder), "-o", str(out)]) == 0
     r = load_project(out).runs[0].wells["A1"].reactions[0]
     assert r.amplification is not None
+
+
+def test_missing_file_is_a_message(tmp_path, capsys):
+    missing = tmp_path / "none.csv"
+    assert main(["inspect", str(missing)]) == 2
+    assert main(["new", str(missing), "-o", str(tmp_path / "x.json")]) == 2
+    assert main(["analyze", str(missing)]) == 2
+    assert "none.csv" in capsys.readouterr().err
+
+
+def test_unknown_ref_and_control_are_errors(tmp_path, capsys):
+    out = tmp_path / "x.qpcrkit.json"
+    assert main(["new", str(RUN1), "--ref", "NOPE", "-o", str(out)]) == 2
+    err = capsys.readouterr().err
+    assert "NOPE" in err and "GAPDH" in err
+    assert main(["new", str(RUN1), "--control", "NOPE", "-o", str(out)]) == 2
+    err = capsys.readouterr().err
+    assert "NOPE" in err and "Ctrl" in err
+    assert not out.exists()
+
+
+def test_locked_output_is_a_message(project_file, tmp_path, monkeypatch, capsys):
+    def locked(*a, **k):
+        raise PermissionError("file is open in Excel")
+
+    monkeypatch.setattr("qpcr_core.export.export_xlsx", locked)
+    assert main(["analyze", str(project_file), "-o", str(tmp_path / "r.xlsx")]) == 2
+    assert "Excel" in capsys.readouterr().err
+
+
+def test_figure_names_are_safe(project_file, tmp_path):
+    from qpcr_core.figures import safe_name
+
+    assert safe_name("a/b:c") == "a_b_c"
+    assert safe_name("IL-6") == "IL-6"
+    assert safe_name("ген 1") == "ген_1"
+
+
+def test_changelog_section(tmp_path):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("changelog_section", ROOT / "scripts" / "changelog_section.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    text = "# Changelog\n\n## [1.1.0] — 2026-12-01\n\n### Added\n- New\n\n## [1.0.0] — 2026-11-01\n\n- Old\n"
+    assert mod.section(text, "1.1.0") == "### Added\n- New"
+    assert mod.section(text, "v1.0.0") == "- Old"
+    assert mod.section(text, "9.9.9") == ""

@@ -121,6 +121,13 @@ EN.update(
         "ui.crash_text": "Unexpected error: {error}\nYou can save the project and keep working. Please send the report to the developer.",
         "ui.copy_report": "Copy report",
         "ui.btn.save": "Save", "ui.btn.discard": "Don't save", "ui.btn.cancel": "Cancel",
+        "ui.series": "Series…", "ui.series_prefix": "Sample name start", "ui.series_replicates": "Replicates per sample",
+        "ui.group_needs_sample": "Groups belong to samples: name the samples of these wells first",
+        "ui.map_pasted": "Wells filled from the plate map: {n}",
+        "ui.suggest_text": "The file names reference genes: {refs}; calibrator sample: {calibrator}. Use them?",
+        "act.paste_map": "Paste plate map",
+        "cli.file_error": "Could not process the file: {error}",
+        "cli.bad_choice": "No such value: {name}. Available: {options}",
         "ui.no_run": "No runs yet: add an instrument export (File → Add run)",
     }
 )

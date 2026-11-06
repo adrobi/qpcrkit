@@ -10,13 +10,16 @@ from i18n import tr
 
 
 def _inspect(args: argparse.Namespace) -> int:
-    from qpcr_core.importers.base import UnknownFormatError
+    from qpcr_core.importers.base import UnknownFormatError, UnsupportedFileError
     from qpcr_core.importers.detect import import_file
 
     try:
         rep = import_file(args.file, "R1")
-    except UnknownFormatError:
+    except (UnknownFormatError, UnsupportedFileError):
         print(tr("cli.unknown_format", path=args.file), file=sys.stderr)
+        return 2
+    except (OSError, ValueError) as exc:
+        print(tr("cli.file_error", error=exc), file=sys.stderr)
         return 2
     rxns = [r for w in rep.run.wells.values() for r in w.reactions]
     print(
@@ -39,7 +42,7 @@ def _new(args: argparse.Namespace) -> int:
     from qpcr_core.importers.base import UnknownFormatError, UnsupportedFileError, add_report
     from qpcr_core.importers.detect import import_files
     from qpcr_core.importers.platekit import apply_layout, read_instrument_layout, read_platekit_json
-    from qpcr_core.models import Project, Target
+    from qpcr_core.models import Project
     from qpcr_core.sessions import save_project
 
     project = Project()
@@ -51,13 +54,24 @@ def _new(args: argparse.Namespace) -> int:
     except (UnknownFormatError, UnsupportedFileError) as exc:
         print(tr("cli.unknown_format", path=exc), file=sys.stderr)
         return 2
+    except (OSError, ValueError) as exc:
+        print(tr("cli.file_error", error=exc), file=sys.stderr)
+        return 2
+    unknown = [n for n in args.ref if n not in project.targets]
+    if unknown:
+        print(tr("cli.bad_choice", name=", ".join(unknown), options=", ".join(sorted(project.targets))), file=sys.stderr)
+        return 2
+    groups = sorted({s.group for s in project.samples.values() if s.group})
+    if args.control and args.control not in groups:
+        print(tr("cli.bad_choice", name=args.control, options=", ".join(groups) or "—"), file=sys.stderr)
+        return 2
     if args.layout:
         reader = read_platekit_json if args.layout.endswith(".json") else read_instrument_layout
         layout = reader(args.layout)
         for run in project.runs:
             apply_layout(project, run.id, layout)
     for name in args.ref:
-        project.targets.setdefault(name, Target(name)).kind = "reference"
+        project.targets[name].kind = "reference"
     if args.control:
         project.settings.control_group = args.control
     save_project(project, args.output)
@@ -84,34 +98,39 @@ def _analyze(args: argparse.Namespace) -> int:
             print(f"  [{f.severity}] {where}: {flag_text(f)}")
 
     outputs: list[str] = []
-    if args.output:
-        from qpcr_core.export import export_xlsx
+    try:
+        if args.output:
+            from qpcr_core import export
 
-        Path(args.output).parent.mkdir(parents=True, exist_ok=True)
-        export_xlsx(project, res, args.output)
-        outputs.append(args.output)
-    if args.csv:
-        from qpcr_core.export import export_csv
+            Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+            export.export_xlsx(project, res, args.output)
+            outputs.append(args.output)
+        if args.csv:
+            from qpcr_core.export import export_csv
 
-        Path(args.csv).parent.mkdir(parents=True, exist_ok=True)
-        export_csv(res, args.csv)
-        outputs.append(args.csv)
-    if args.html:
-        from qpcr_core.export import export_html
+            Path(args.csv).parent.mkdir(parents=True, exist_ok=True)
+            export_csv(res, args.csv)
+            outputs.append(args.csv)
+        if args.html:
+            from qpcr_core.export import export_html
 
-        Path(args.html).parent.mkdir(parents=True, exist_ok=True)
-        export_html(project, res, args.html)
-        outputs.append(args.html)
-    if args.figures:
-        from qpcr_core.figures import expression_figure, save_figure, std_curve_figure
+            Path(args.html).parent.mkdir(parents=True, exist_ok=True)
+            export_html(project, res, args.html)
+            outputs.append(args.html)
+        if args.figures:
+            from qpcr_core.figures import expression_figure, safe_name, save_figure, std_curve_figure
 
-        out = Path(args.figures)
-        out.mkdir(parents=True, exist_ok=True)
-        for target in sorted({g.target for g in res.groups}):
-            save_figure(expression_figure(res, target, error=project.settings.error_bar), out / f"expression_{target}.svg")
-        for (run_id, target), curve in res.std_curves.items():
-            save_figure(std_curve_figure(curve), out / f"stdcurve_{target}_{run_id or 'pooled'}.svg")
-        outputs.append(str(out))
+            out = Path(args.figures)
+            out.mkdir(parents=True, exist_ok=True)
+            for target in sorted({g.target for g in res.groups}):
+                fig = expression_figure(res, target, error=project.settings.error_bar)
+                save_figure(fig, out / f"expression_{safe_name(target)}.svg")
+            for (run_id, target), curve in res.std_curves.items():
+                save_figure(std_curve_figure(curve), out / f"stdcurve_{safe_name(target)}_{run_id or 'pooled'}.svg")
+            outputs.append(str(out))
+    except OSError as exc:
+        print(tr("cli.file_error", error=exc), file=sys.stderr)
+        return 2
     for path in outputs:
         print(tr("cli.saved", path=path))
     return 1 if args.strict and counts["error"] else 0
