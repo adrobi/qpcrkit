@@ -53,6 +53,15 @@ EN: dict[str, str] = {
 
 EN.update(
     {
+        "hint.no_target": "{count} wells have no target. Select them and set the target",
+        "hint.no_sample": "{count} wells have no sample. Select them and set the sample",
+        "hint.no_reference": "Choose a reference gene",
+        "hint.no_groups": "{count} samples have no group. Set the groups",
+        "hint.no_control": "Choose the control group",
+    }
+)
+EN.update(
+    {
         "cli.unknown_format": "Unrecognized file format: {path}. Open it in qpcrkit with the CSV import wizard.",
         "cli.inspect": "Format: {fmt}\nWells: {wells}\nReactions: {reactions}\nTargets: {targets}\nSamples: {samples}\nSkipped rows: {skipped}",
         "cli.summary": "Errors: {error}, warnings: {warning}, info: {info}",

@@ -71,6 +71,11 @@ def _sdm_index(y: np.ndarray) -> int | None:
 
 
 @lru_cache(maxsize=8192)
+def _curve_sdm(curve: Curve) -> int | None:
+    return _sdm_index(np.asarray(curve.y, dtype=float))
+
+
+@lru_cache(maxsize=8192)
 def _baseline_window(curve: Curve) -> tuple[int, int]:
     """Indexes [start, end) of the cycles before the growth."""
     y = np.asarray(curve.y, dtype=float)
@@ -121,6 +126,7 @@ def subtract_baseline(curve: Curve, already_subtracted: bool = False) -> Curve:
     return Curve(curve.x, y.tolist())
 
 
+@lru_cache(maxsize=8192)
 def baseline_noise(curve: Curve) -> float:
     """SD of the cycles before the growth; never zero, so a threshold can be built on it."""
     y = np.asarray(curve.y, dtype=float)
@@ -128,6 +134,7 @@ def baseline_noise(curve: Curve) -> float:
     return max(float(np.std(y[start:end])), 1e-9 * float(np.ptp(y)))
 
 
+@lru_cache(maxsize=8192)
 def has_amplification(curve: Curve) -> bool:
     """``curve`` has its background removed."""
     y = np.asarray(curve.y, dtype=float)
@@ -193,7 +200,7 @@ def efficiency_window(curves: list[Curve]) -> tuple[float, float] | None:
     growing = [c for c in curves if has_amplification(c)]
     tops = []
     for c in growing:
-        i = _sdm_index(np.asarray(c.y, dtype=float))
+        i = _curve_sdm(c)
         if i is not None:
             tops.append(c.y[i])
     if not tops:
@@ -211,6 +218,7 @@ def _fit_log(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
     return float(10**slope - 1), r2
 
 
+@lru_cache(maxsize=8192)
 def well_efficiency(curve: Curve, window: tuple[float, float]) -> tuple[float, float] | None:
     """(E, R²) over the longest unbroken run of points inside the band."""
     x, y = np.asarray(curve.x, dtype=float), np.asarray(curve.y, dtype=float)
@@ -267,7 +275,8 @@ def melt_peaks(derivative: Curve, min_height: float) -> list[float]:
     return [tm for _, tm in _melt_peak_list(derivative, min_height)]
 
 
-def _melt_peak_list(derivative: Curve, min_height: float) -> list[tuple[float, float]]:
+@lru_cache(maxsize=8192)
+def _melt_peak_list(derivative: Curve, min_height: float) -> tuple[tuple[float, float], ...]:
     """(height, Tm), highest first; the top is refined by a parabola through 3 points."""
     x, y = np.asarray(derivative.x, dtype=float), np.asarray(derivative.y, dtype=float)
     step = float(np.median(np.diff(x)))
@@ -279,7 +288,7 @@ def _melt_peak_list(derivative: Curve, min_height: float) -> list[tuple[float, f
         bend = a - 2 * b + c
         shift = 0.5 * (a - c) / bend if bend else 0.0
         out.append((float(b), float(x[i] + shift * step)))
-    return sorted(out, reverse=True)
+    return tuple(sorted(out, reverse=True))
 
 
 # --- one project ---

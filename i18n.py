@@ -136,6 +136,15 @@ def current_language() -> str:
 
 RU.update(
     {
+        "hint.no_target": "Лунок без мишени: {count}. Выделите их и задайте мишень",
+        "hint.no_sample": "Лунок без образца: {count}. Выделите их и задайте образец",
+        "hint.no_reference": "Выберите референсный ген",
+        "hint.no_groups": "Образцов без группы: {count}. Задайте группы",
+        "hint.no_control": "Выберите контрольную группу",
+    }
+)
+RU.update(
+    {
         "cli.unknown_format": "Формат файла не распознан: {path}. Откройте его в qpcrkit через мастер импорта CSV.",
         "cli.inspect": "Формат: {fmt}\nЛунок: {wells}\nРеакций: {reactions}\nМишеней: {targets}\nОбразцов: {samples}\nПропущено строк: {skipped}",
         "cli.summary": "Ошибок: {error}, предупреждений: {warning}, информационных: {info}",

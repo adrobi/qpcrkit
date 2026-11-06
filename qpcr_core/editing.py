@@ -108,6 +108,17 @@ def rename_target_in_run(project: Project, run_id: str, old: str, new: str) -> N
     project.prune_orphans()
 
 
+def set_threshold(project: Project, run_id: str, target: str, value: float | None) -> None:
+    """A manual threshold for a target on a run; None goes back to the automatic one."""
+    run = project.run(run_id)
+    if value is None:
+        run.thresholds.pop(target, None)
+    elif value <= 0:
+        raise ValueError("threshold must be positive")
+    else:
+        run.thresholds[target] = float(value)
+
+
 def fill_series(
     project: Project, run_id: str, coords: list[str], prefix: str, start: int = 1, replicates: int = 1
 ) -> None:

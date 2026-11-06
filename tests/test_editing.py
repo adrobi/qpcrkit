@@ -285,3 +285,32 @@ def test_threshold_stays_while_some_wells_keep_the_target():
     p = _with_threshold()
     set_target(p, "R1", ["A1"], "GAPDH")
     assert p.runs[0].thresholds == {"SYBR": 0.2}
+
+
+# --- manual threshold ---
+
+
+def test_set_threshold_sets_and_removes():
+    p = make_project([("R1", "A1", "s", "T", "unknown", 20.0, None)])
+    ed.set_threshold(p, "R1", "T", 0.2)
+    assert p.runs[0].thresholds == {"T": 0.2}
+    ed.set_threshold(p, "R1", "T", None)
+    assert p.runs[0].thresholds == {}
+    ed.set_threshold(p, "R1", "T", None)  # nothing to remove is fine
+
+
+@pytest.mark.parametrize("bad", [0.0, -1.0])
+def test_set_threshold_refuses_non_positive(bad):
+    p = make_project([("R1", "A1", "s", "T", "unknown", 20.0, None)])
+    with pytest.raises(ValueError):
+        ed.set_threshold(p, "R1", "T", bad)
+    assert p.runs[0].thresholds == {}
+
+
+def test_set_threshold_can_be_undone():
+    p = make_project([("R1", "A1", "s", "T", "unknown", 20.0, None)])
+    ed.set_threshold(p, "R1", "T", 0.2)
+    history = ed.EditHistory()
+    history.record(p)
+    ed.set_threshold(p, "R1", "T", 0.5)
+    assert history.undo(p).runs[0].thresholds == {"T": 0.2}

@@ -521,3 +521,17 @@ def test_threshold_of_a_target_only_in_ntc_on_a_plate_is_not_a_difference():
     p = _project(rows)
     p.runs[2].thresholds["T"] = 0.5
     assert "thresholds_differ_no_irc" not in _codes(analyze(p))
+
+
+def test_second_analysis_does_not_refit_the_curves():
+    rows = [
+        ("R1", f"{chr(65 + i // 12)}{i % 12 + 1}", f"s{i}", "T", "unknown", None, logistic(18 + i % 15, noise=0.002, seed=i + 5000))
+        for i in range(96)
+    ]
+    p = _project(rows)
+    analyze(p)
+    p.runs[0].thresholds["T"] = 0.15
+    cached = (cv.well_efficiency, cv._curve_sdm, cv.has_amplification, cv.baseline_noise)
+    before = [f.cache_info().misses for f in cached]
+    analyze(p)
+    assert [f.cache_info().misses for f in cached] == before
