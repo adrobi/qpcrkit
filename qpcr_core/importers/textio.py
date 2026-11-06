@@ -55,18 +55,26 @@ def _sheet_rows(ws) -> list[list[str]]:
     return [r for r in rows if any(r)]
 
 
-def _is_xlsx(path: Path) -> bool:
-    return path.suffix.lower() in (".xlsx", ".xlsm")
+def is_workbook(path: str | os.PathLike) -> bool:
+    return Path(path).suffix.lower() in (".xlsx", ".xlsm")
+
+
+def _open_workbook(path: Path):
+    import warnings
+
+    import openpyxl
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)  # instruments write workbooks without a default style
+        return openpyxl.load_workbook(path, read_only=True, data_only=True)
 
 
 def read_sheets(path: str | os.PathLike) -> dict[str, list[list[str]]]:
     """All sheets of a workbook by name; a text file is one sheet named ""."""
     path = Path(path)
-    if not _is_xlsx(path):
+    if not is_workbook(path):
         return {"": read_table(path)[0]}
-    import openpyxl
-
-    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    wb = _open_workbook(path)
     try:
         return {ws.title: _sheet_rows(ws) for ws in wb.worksheets}
     finally:
@@ -74,9 +82,7 @@ def read_sheets(path: str | os.PathLike) -> dict[str, list[list[str]]]:
 
 
 def _read_xlsx(path: Path) -> list[list[str]]:
-    import openpyxl
-
-    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    wb = _open_workbook(path)
     try:
         return _sheet_rows(wb["Results"] if "Results" in wb.sheetnames else wb.worksheets[0])
     finally:
@@ -86,7 +92,7 @@ def _read_xlsx(path: Path) -> list[list[str]]:
 def read_table(path: str | os.PathLike) -> tuple[list[list[str]], str | None]:
     """Rows and the delimiter (None for a workbook)."""
     path = Path(path)
-    if _is_xlsx(path):
+    if is_workbook(path):
         return _read_xlsx(path), None
     raw = path.read_bytes()
     if path.suffix.lower() in _BINARY_SUFFIXES or (
