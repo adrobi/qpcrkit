@@ -1,11 +1,14 @@
-"""Generate the deterministic demo CFX exports in examples/ (two plates, IL6 vs GAPDH)."""
+"""Generate the deterministic demo in examples/: CFX exports (two plates, IL6 vs GAPDH) and a project with curves."""
 
 from __future__ import annotations
 
 import csv
 import math
 import random
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 OUT = Path(__file__).resolve().parent.parent / "examples"
 HEADER = ["", "Well", "Fluor", "Target", "Content", "Replicate", "Sample", "Biological Set Name", "Cq",
@@ -49,6 +52,32 @@ def plate(groups: list[str], shift: float, rng: random.Random, standards: bool) 
     return rows
 
 
+def demo_project():
+    """The exports as a project, with curves that cross the threshold at the Cq of each reaction."""
+    from qpcr_core.importers.detect import import_file
+    from qpcr_core.importers.base import add_report
+    from qpcr_core.models import Project
+    from tests.curve_factory import flat, logistic, melt
+
+    project = Project()
+    seed = 0
+    for index, name in enumerate(("demo_run1.csv", "demo_run2.csv"), start=1):
+        add_report(project, import_file(OUT / name, f"R{index}"))
+    for run in project.runs:
+        for well in run.wells.values():
+            for r in well.reactions:
+                seed += 1
+                if r.cq is None:
+                    r.amplification = flat(drift=0.001, noise=0.002, seed=seed)
+                    r.melt = melt(height=0.0, noise=0.002, seed=seed)
+                else:
+                    r.amplification = logistic(r.cq, efficiency=0.95, drift=0.001, noise=0.002, seed=seed)
+                    r.melt = melt(tm=84.5 if r.target == "GAPDH" else 81.0, noise=0.002, seed=seed)
+    project.targets["GAPDH"].kind = "reference"
+    project.settings.control_group = "Ctrl"
+    return project
+
+
 def main() -> None:
     rng = random.Random(42)
     for name, groups, shift, std in (("demo_run1.csv", ["Ctrl", "LPS"], 0.0, True), ("demo_run2.csv", ["LPS+Dex"], 0.5, False)):
@@ -56,6 +85,11 @@ def main() -> None:
             w = csv.writer(f)
             w.writerow(HEADER)
             w.writerows(plate(groups, shift, rng, std))
+    from qpcr_core.sessions import save_project
+
+    path = OUT / "demo_project.qpcrkit.json"
+    save_project(demo_project(), path)
+    path.with_name(path.name + ".bak").unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

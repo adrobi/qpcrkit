@@ -63,6 +63,11 @@ def resource_dir() -> Path:
     return Path(frozen) / "ui" if frozen else Path(__file__).resolve().parent
 
 
+def demo_path() -> Path:
+    """The demo project: next to ``ui/`` in the sources and in a bundle alike (see qpcrkit.spec)."""
+    return resource_dir().parent / "examples" / "demo_project.qpcrkit.json"
+
+
 def resolve_dark(mode: str, system_dark: bool) -> bool:
     return system_dark if mode == "auto" else mode == "dark"
 

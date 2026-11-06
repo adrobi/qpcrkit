@@ -53,6 +53,15 @@ EN: dict[str, str] = {
 
 EN.update(
     {
+        "start.title": "Drop instrument files here",
+        "start.note": "Several files or a folder at once: CFX, QuantStudio, Rotor-Gene, RDML, CSV",
+        "start.add": "Choose files…",
+        "start.open": "Open project…",
+        "start.demo": "Demo data",
+    }
+)
+EN.update(
+    {
         "ui.curves.auto": "Auto",
         "ui.curves.auto_tip": "Reset the manual threshold",
     }

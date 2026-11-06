@@ -10,7 +10,7 @@ a = Analysis(
     ["qpcr_cli.py"],
     pathex=[],
     binaries=[],
-    datas=[("ui/icons/app/qpcrkit.png", "ui/icons/app"), ("ui/icons/*.svg", "ui/icons")],
+    datas=[("ui/icons/app/qpcrkit.png", "ui/icons/app"), ("ui/icons/*.svg", "ui/icons"), ("examples/demo_project.qpcrkit.json", "examples")],
     # The GUI is imported lazily by qpcr_cli, so PyInstaller cannot see it on its own.
     hiddenimports=[
         "i18n",

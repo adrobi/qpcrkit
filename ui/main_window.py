@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QLibraryInfo, QLocale, Qt, QTimer, QTranslator
-from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QGuiApplication, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QDragEnterEvent, QDropEvent, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -59,9 +59,10 @@ from ui.data_table import DataTable
 from ui.editor import ProjectEditor
 from ui.plate_view import PlateView
 from ui.selection_panel import SelectionPanel
+from ui.start_page import StartPage
 from ui.result_tabs import ExpressionTab, QcTab, StdCurveTab
 from ui.shell import PAGES, HintBar, NavRail, TopBar
-from ui.theme import app_icon, app_qss, resolve_dark, system_is_dark
+from ui.theme import app_icon, app_qss, demo_path, resolve_dark, system_is_dark
 
 RECALC_DELAY_MS = 300
 PAGE_NAMES = tuple(name for name, _ in PAGES)
@@ -113,6 +114,8 @@ class MainWindow(QMainWindow):
         self.analysis: AnalysisDialog | None = None
         self.editor.changed.connect(self._on_project_changed)
         self.resize(1400, 860)
+        self.setAcceptDrops(True)
+        self._had_runs = False
         self._build_ui()
         QGuiApplication.styleHints().colorSchemeChanged.connect(self._on_scheme_changed)
         self.apply_theme(self.config.theme, save=False)
@@ -175,8 +178,17 @@ class MainWindow(QMainWindow):
         root_layout.addWidget(self.top_bar)
         root_layout.addLayout(body, 1)
 
+        self.start_page = StartPage()
+        self.start_page.add_requested.connect(self._add_run_dialog)
+        self.start_page.open_requested.connect(self._open_dialog)
+        self.start_page.demo_requested.connect(self.open_demo)
+        self.root_stack = QStackedWidget()
+        self.root_stack.addWidget(self.start_page)
+        self.root_stack.addWidget(root)
+        self._workspace = root
+
         old = self.centralWidget()
-        self.setCentralWidget(root)
+        self.setCentralWidget(self.root_stack)
         if old is not None:
             old.deleteLater()
         self._build_menus()
@@ -267,6 +279,11 @@ class MainWindow(QMainWindow):
         project = self.editor.project
         if self.current_run_id not in {r.id for r in project.runs}:
             self.current_run_id = project.runs[0].id if project.runs else None
+        has_runs = bool(project.runs)
+        self.root_stack.setCurrentWidget(self._workspace if has_runs else self.start_page)
+        if has_runs and not self._had_runs:
+            self.go_to("plate")
+        self._had_runs = has_runs
         self.tree.refresh(project)
         self.tree.set_current_run(self.current_run_id)
         self.top_bar.refresh(project, self.editor.path)
@@ -319,6 +336,9 @@ class MainWindow(QMainWindow):
     def go_to(self, name: str) -> None:
         self.pages.setCurrentWidget(self._page_widgets[name])
         self.nav.set_page(name)
+
+    def is_start_shown(self) -> bool:
+        return self.root_stack.currentWidget() is self.start_page
 
     def current_page(self) -> str:
         current = self.pages.currentWidget()
@@ -465,6 +485,33 @@ class MainWindow(QMainWindow):
         self.recalculate_now()
         return True
 
+    def open_demo(self) -> bool:
+        """A copy without a path: saving it asks for a name and leaves the demo as it was."""
+        if not self._confirm_discard():
+            return False
+        try:
+            project = load_project(demo_path())
+        except SessionError as exc:
+            self._show_error(str(exc))
+            return False
+        self.last_import_note = ""
+        self.editor.set_project(project)
+        self.recalculate_now()
+        return True
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        urls = event.mimeData().urls()
+        if urls and all(u.isLocalFile() for u in urls):
+            event.acceptProposedAction()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        paths = [Path(u.toLocalFile()) for u in event.mimeData().urls() if u.isLocalFile()]
+        if len(paths) == 1 and paths[0].name.lower().endswith(".qpcrkit.json"):
+            self.open_project(paths[0])
+        elif paths:
+            self.add_run(paths)
+        event.acceptProposedAction()
+
     def save_project(self, path: str | Path | None = None) -> bool:
         path = path or self.editor.path or self._ask_save_path(tr("ui.filter_project"), "project.qpcrkit.json")
         if not path:
@@ -589,6 +636,7 @@ class MainWindow(QMainWindow):
         if app is not None and app.styleSheet() != app_qss(dark):  # re-setting repolishes every widget
             app.setStyleSheet(app_qss(dark))
         self.plate.set_theme(dark)
+        self.start_page.set_theme(dark)
         self.curves.set_theme(dark)
         self.nav.set_theme(dark)
         self.top_bar.set_theme(dark)
@@ -611,6 +659,7 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self.go_to(page)
         self.plate.set_theme(self.dark)
+        self.start_page.set_theme(self.dark)
         self.curves.set_theme(self.dark)
         self.nav.set_theme(self.dark)
         self.top_bar.set_theme(self.dark)

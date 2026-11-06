@@ -12,3 +12,6 @@ qpcrkit analyze demo.qpcrkit.json -o results.xlsx --html report.html --figures f
 ```
 
 Expected: IL6 ≈ 8× up in `LPS`, ≈ 2× in `LPS+Dex`.
+
+`demo_project.qpcrkit.json` is the same experiment as a ready project with synthetic amplification and
+melt curves; the program opens it from the start screen.

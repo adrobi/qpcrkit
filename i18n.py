@@ -136,6 +136,15 @@ def current_language() -> str:
 
 RU.update(
     {
+        "start.title": "Перетащите файлы прибора сюда",
+        "start.note": "Можно сразу несколько файлов или папку: CFX, QuantStudio, Rotor-Gene, RDML, CSV",
+        "start.add": "Выбрать файлы…",
+        "start.open": "Открыть проект…",
+        "start.demo": "Демо-данные",
+    }
+)
+RU.update(
+    {
         "ui.curves.auto": "Авто",
         "ui.curves.auto_tip": "Сбросить ручной порог",
     }
