@@ -297,3 +297,198 @@ def test_other_run_in_the_window(win):
     win.recalculate_now()
     win.select_run("R2")
     assert win.curves.line_count() == 1
+
+
+# --- the threshold ---
+
+
+def _event(v, name, x, y):
+    MouseEvent(name, v.canvas, x, y, button=MouseButton.LEFT)._process()
+
+
+def _drag(v, to_data_y):
+    """Press on the line, move to a level of the data, release there."""
+    box = v.ax.bbox
+    x = (box.x0 + box.x1) / 2
+    y0 = v.ax.transData.transform((1, v.threshold_value()))[1]
+    y1 = v.ax.transData.transform((1, to_data_y))[1]
+    _event(v, "button_press_event", x, y0)
+    _event(v, "motion_notify_event", x, y1)
+    _event(v, "button_release_event", x, y1)
+
+
+def _single(v):
+    v.target_combo.setCurrentIndex(v.target_combo.findData("T"))
+    v.canvas.draw()
+    return v
+
+
+def test_line_only_with_one_target(view):
+    assert view.threshold_line is None
+    assert _single(view).threshold_line is not None
+
+
+def test_line_on_a_run_with_a_single_target(qapp):
+    p = _project([("R1", f"A{i + 1}", f"s{i}", "T", "unknown", None, logistic(20 + i)) for i in range(3)])
+    v = CurveView()
+    v.resize(700, 500)
+    v.set_data(p, analyze(p), "R1")
+    assert v.threshold_line is not None
+
+
+def test_no_line_on_melt(view):
+    _single(view)
+    view.mode_combo.setCurrentIndex(view.mode_combo.findData("melt"))
+    assert view.threshold_line is None
+    view.mode_combo.setCurrentIndex(view.mode_combo.findData("log"))
+    assert view.threshold_line is not None
+
+
+def test_no_line_without_a_threshold(qapp):
+    p = _project([("R1", "A1", "s", "T", "ntc", None, flat(noise=0.002))])
+    v = CurveView()
+    v.resize(700, 500)
+    v.set_data(p, analyze(p), "R1")
+    assert v.threshold_line is None
+
+
+def test_line_shows_the_threshold_of_the_results(view):
+    _single(view)
+    expected = view.results.curves[("R1", "A1", "T", "FAM")].threshold
+    assert view.threshold_value() == pytest.approx(expected)
+
+
+def test_line_prefers_the_manual_value(view):
+    _single(view)
+    view.project.runs[0].thresholds["T"] = 0.33
+    view.set_data(view.project, view.results, "R1")
+    assert view.threshold_value() == pytest.approx(0.33)
+
+
+def test_drag_reports_the_new_value(view):
+    _single(view)
+    got = []
+    clicks = []
+    view.threshold_changed.connect(lambda t, value: got.append((t, value)))
+    view.wells_clicked.connect(lambda *a: clicks.append(a))
+    _drag(view, 0.5)
+    assert len(got) == 1 and got[0][0] == "T"
+    assert got[0][1] == pytest.approx(0.5, rel=0.03)
+    assert clicks == []
+
+
+def test_drag_moves_the_line_while_moving(view):
+    _single(view)
+    box = view.ax.bbox
+    x = (box.x0 + box.x1) / 2
+    y0 = view.ax.transData.transform((1, view.threshold_value()))[1]
+    y1 = view.ax.transData.transform((1, 0.6))[1]
+    _event(view, "button_press_event", x, y0)
+    _event(view, "motion_notify_event", x, y1)
+    assert view.threshold_value() == pytest.approx(0.6, rel=0.03)
+    _event(view, "button_release_event", x, y1)
+
+
+def test_press_elsewhere_does_not_drag(view):
+    _single(view)
+    got = []
+    view.threshold_changed.connect(lambda *a: got.append(a))
+    box = view.ax.bbox
+    x = (box.x0 + box.x1) / 2
+    far = view.ax.transData.transform((1, view.threshold_value()))[1] + 60
+    _event(view, "button_press_event", x, far)
+    _event(view, "motion_notify_event", x, far + 20)
+    _event(view, "button_release_event", x, far + 20)
+    assert got == []
+
+
+def test_release_below_zero_puts_the_line_back(view):
+    _single(view)
+    before = view.threshold_value()
+    got = []
+    view.threshold_changed.connect(lambda *a: got.append(a))
+    _drag(view, view.ax.get_ylim()[0] * 0.5)  # the axis goes a little below zero
+    assert got == []
+    assert view.threshold_value() == pytest.approx(before)
+
+
+def test_release_outside_the_axes_puts_the_line_back(view):
+    _single(view)
+    before = view.threshold_value()
+    got = []
+    view.threshold_changed.connect(lambda *a: got.append(a))
+    box = view.ax.bbox
+    x = (box.x0 + box.x1) / 2
+    y0 = view.ax.transData.transform((1, before))[1]
+    _event(view, "button_press_event", x, y0)
+    _event(view, "motion_notify_event", x, y0 + 30)
+    _event(view, "button_release_event", box.x1 + 40, y0 + 30)
+    assert got == []
+    assert view.threshold_value() == pytest.approx(before)
+
+
+def test_drag_on_a_log_axis(view):
+    _single(view)
+    view.mode_combo.setCurrentIndex(view.mode_combo.findData("log"))
+    view.canvas.draw()
+    got = []
+    view.threshold_changed.connect(lambda t, value: got.append(value))
+    _drag(view, 0.05)
+    assert got and got[0] == pytest.approx(0.05, rel=0.1)
+
+
+def test_auto_button_only_with_a_manual_threshold(view):
+    _single(view)
+    assert view.auto_button.isHidden()
+    view.project.runs[0].thresholds["T"] = 0.33
+    view.set_data(view.project, view.results, "R1")
+    assert not view.auto_button.isHidden()
+    got = []
+    view.threshold_reset.connect(got.append)
+    view.auto_button.click()
+    assert got == ["T"]
+
+
+def test_auto_button_hidden_with_several_targets(view):
+    view.project.runs[0].thresholds["T"] = 0.33
+    view.set_data(view.project, view.results, "R1")
+    assert view.auto_button.isHidden()
+
+
+def test_window_applies_a_dragged_threshold_at_once(curve_win):
+    v = curve_win.curves
+    _single(v)
+    key = ("R1", "A1", "T", "FAM")
+    before = curve_win.results.curves[key]
+    _drag(v, 0.5)
+    v = curve_win.curves
+    project = curve_win.editor.project
+    assert project.runs[0].thresholds["T"] == pytest.approx(0.5, rel=0.03)
+    assert not curve_win._timer.isActive()
+    after = curve_win.results.curves[key]
+    assert after.threshold == pytest.approx(0.5, rel=0.03)
+    assert after.cq_calc > before.cq_calc
+    assert v.threshold_value() == pytest.approx(0.5, rel=0.03)
+
+
+def test_window_undo_returns_the_line(curve_win):
+    v = curve_win.curves
+    _single(v)
+    before = v.threshold_value()
+    _drag(v, 0.5)
+    curve_win.editor.undo()
+    curve_win.recalculate_now()
+    assert curve_win.editor.project.runs[0].thresholds == {}
+    assert v.threshold_value() == pytest.approx(before)
+    assert v.auto_button.isHidden()
+
+
+def test_window_auto_button_goes_back(curve_win):
+    v = curve_win.curves
+    _single(v)
+    before = v.threshold_value()
+    _drag(v, 0.5)
+    assert not v.auto_button.isHidden()
+    v.auto_button.click()
+    assert curve_win.editor.project.runs[0].thresholds == {}
+    assert v.threshold_value() == pytest.approx(before)

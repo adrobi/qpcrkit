@@ -53,6 +53,12 @@ EN: dict[str, str] = {
 
 EN.update(
     {
+        "ui.curves.auto": "Auto",
+        "ui.curves.auto_tip": "Reset the manual threshold",
+    }
+)
+EN.update(
+    {
         "ui.curves.amp": "Amplification",
         "ui.curves.log": "Amplification, log",
         "ui.curves.melt": "Melt",

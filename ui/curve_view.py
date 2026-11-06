@@ -6,16 +6,17 @@ import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
+from matplotlib.lines import Line2D
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QCursor
-from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QToolTip, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QToolTip, QVBoxLayout, QWidget
 
 from i18n import tr
 from qpcr_core.curves import derivative_curve, run_uses_calculated, subtracted_curve
 from qpcr_core.models import Project, Reaction, Well
 from qpcr_core.pipeline import Results
 from ui.plate_view import target_color_map
-from ui.theme import theme
+from ui.theme import icon, theme
 
 _CLICK_PX = 5.0
 _HOVER_MS = 30
@@ -24,6 +25,8 @@ _DIM_ALPHA = 0.25
 
 class CurveView(QWidget):
     wells_clicked = Signal(list, bool)  # coords, add to the selection (Ctrl)
+    threshold_changed = Signal(str, float)
+    threshold_reset = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -38,7 +41,9 @@ class CurveView(QWidget):
         self._backgrounds: dict[bool, object] = {}
         self._dimmed = False
         self._segments_px: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
-        self._capturing = False
+        self.threshold_line: Line2D | None = None
+        self._threshold_target: str | None = None
+        self._drag_from: float | None = None
         self._hover_pos: tuple[float, float] | None = None
 
         self.mode_combo = QComboBox()
@@ -47,6 +52,10 @@ class CurveView(QWidget):
         self.mode_combo.addItem(tr("ui.curves.melt"), "melt")
         self.target_combo = QComboBox()
         self.target_combo.addItem(tr("ui.curves.all"), "")
+        self.auto_button = QPushButton(tr("ui.curves.auto"))
+        self.auto_button.setToolTip(tr("ui.curves.auto_tip"))
+        self.auto_button.hide()
+        self.auto_button.clicked.connect(lambda: self.threshold_reset.emit(self._threshold_target or ""))
         self.placeholder = QLabel(tr("ui.curves.none"))
         self.placeholder.setObjectName("dim")
         self.placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -62,8 +71,8 @@ class CurveView(QWidget):
         bar.setContentsMargins(0, 0, 0, 0)
         bar.addWidget(self.mode_combo)
         bar.addWidget(self.target_combo)
+        bar.addWidget(self.auto_button)
         bar.addStretch(1)
-        self.tools = bar
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(bar)
@@ -75,6 +84,7 @@ class CurveView(QWidget):
         self.canvas.mpl_connect("draw_event", self._on_draw)
         self.canvas.mpl_connect("button_press_event", self._on_press)
         self.canvas.mpl_connect("motion_notify_event", self._on_motion)
+        self.canvas.mpl_connect("button_release_event", self._on_release)
         self.mode_combo.currentIndexChanged.connect(self._rebuild)
         self.target_combo.currentIndexChanged.connect(self._rebuild)
         self._apply_theme()
@@ -139,7 +149,54 @@ class CurveView(QWidget):
         self._segments_px = None
         self._update_top()
         self._set_dim(bool(self._top.get_segments()))
+        self._update_threshold(colors)
         self.canvas.draw_idle()
+
+    def threshold_value(self) -> float | None:
+        return float(self.threshold_line.get_ydata()[0]) if self.threshold_line is not None else None
+
+    def _update_threshold(self, colors: dict[str, str]) -> None:
+        """A line only for one target on the graph: on several it would not say whose it is."""
+        if self.threshold_line is not None:
+            self.threshold_line.remove()
+            self.threshold_line = None
+        self._drag_from = None
+        self._threshold_target = None
+        self.auto_button.hide()
+        if self._mode() == "melt" or len(self._layers) != 1:
+            return
+        target = next(iter(self._layers))
+        run = self.project.run(self.run_id)
+        value = run.thresholds.get(target)
+        if value is None and self.results is not None:
+            value = next((r.threshold for k, r in self.results.curves.items() if k[0] == run.id and k[2] == target and r.threshold), None)
+        self._threshold_target = target
+        self.auto_button.setVisible(target in run.thresholds)
+        if value:
+            self.threshold_line = self.ax.axhline(value, color=colors.get(target, "#2563eb"), linestyle="--", linewidth=1.2)
+
+    def _near_threshold(self, event) -> bool:
+        if self.threshold_line is None or event.inaxes is not self.ax:
+            return False
+        level = self.ax.transData.transform((event.xdata, self.threshold_value()))[1]
+        return abs(level - event.y) <= _CLICK_PX
+
+    def _move_threshold(self, value: float) -> None:
+        self.threshold_line.set_ydata([value, value])
+        if self._dimmed in self._backgrounds:
+            self.canvas.restore_region(self._backgrounds[self._dimmed])
+        self._paint_top()
+
+    def _on_release(self, event) -> None:
+        if self._drag_from is None:
+            return
+        start, self._drag_from = self._drag_from, None
+        self.threshold_line.set_animated(False)
+        inside = event.inaxes is self.ax and event.ydata is not None and event.ydata > 0
+        self.threshold_line.set_ydata([event.ydata if inside else start] * 2)
+        self.canvas.draw_idle()
+        if inside:
+            self.threshold_changed.emit(self._threshold_target, float(event.ydata))
 
     def _for_axis(self, lines: list[np.ndarray]) -> list[np.ndarray]:
         if self._mode() != "log":
@@ -198,6 +255,8 @@ class CurveView(QWidget):
 
     def _paint_top(self) -> None:
         self.ax.draw_artist(self._top)
+        if self.threshold_line is not None and self.threshold_line.get_animated():
+            self.ax.draw_artist(self.threshold_line)
         self.canvas.blit(self.figure.bbox)
 
     def line_count(self) -> int:
@@ -242,11 +301,22 @@ class CurveView(QWidget):
     def _on_press(self, event) -> None:
         if event.button != 1 or event.inaxes is not self.ax:
             return
+        if self._near_threshold(event):
+            self._drag_from = self.threshold_value()
+            self.threshold_line.set_animated(True)
+            self.canvas.draw()  # the saved background must not hold the line
+            return
         coord = self.coord_at(event.x, event.y)
         if coord is not None:
             self.wells_clicked.emit([coord], "ctrl" in (event.modifiers or ()))
 
     def _on_motion(self, event) -> None:
+        if self._drag_from is not None:
+            if event.inaxes is self.ax and event.ydata is not None and event.ydata > 0:
+                self._move_threshold(float(event.ydata))
+            return
+        near = self._near_threshold(event)
+        self.canvas.setCursor(Qt.CursorShape.SizeVerCursor if near else Qt.CursorShape.ArrowCursor)
         self._hover_pos = (event.x, event.y) if event.inaxes is self.ax else None
         if not self._hover_timer.isActive():
             self._hover_timer.start()
@@ -292,3 +362,4 @@ class CurveView(QWidget):
         self.ax.grid(True, color=t["grid"], linewidth=0.5)
         self.ax.set_axisbelow(True)
         self._top.set_color(t["accent"])
+        self.auto_button.setIcon(icon("rotate-ccw", t["dim"]))

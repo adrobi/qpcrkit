@@ -232,10 +232,7 @@ class PlateView(QWidget):
                 for reaction in well.reactions:
                     if reaction.target:
                         names.add(reaction.target)
-        self._target_colors = {
-            name: TARGET_PALETTE[i % len(TARGET_PALETTE)]
-            for i, name in enumerate(sorted(names))
-        }
+        self._target_colors = target_color_map(names)
 
     # --- Painting ---
 

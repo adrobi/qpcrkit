@@ -36,6 +36,7 @@ from qpcr_core.editing import (
     set_role,
     set_target,
     set_target_kind,
+    set_threshold,
     update_settings,
 )
 from qpcr_core.export import export_csv, export_html, export_xlsx
@@ -135,6 +136,8 @@ class MainWindow(QMainWindow):
         self.plate.exclude_toggled.connect(self._toggle_exclusion)
         self.curves = CurveView()
         self.curves.wells_clicked.connect(self._on_wells_clicked)
+        self.curves.threshold_changed.connect(self._set_threshold)
+        self.curves.threshold_reset.connect(lambda target: self._set_threshold(target, None))
         self.data = DataTable(self.editor)
         self.std = StdCurveTab()
         self.expr = ExpressionTab(self.editor)
@@ -337,6 +340,11 @@ class MainWindow(QMainWindow):
         coords = self.plate.selected_coords()
         self.selection.set_selection(project, run, coords)
         self.curves.set_selection(coords)
+
+    def _set_threshold(self, target: str, value: float | None) -> None:
+        """At once, not after the usual delay: the line must not jump back meanwhile."""
+        self.editor.apply(set_threshold, self.current_run_id, target, value)
+        self.recalculate_now()
 
     def _on_wells_clicked(self, coords: list[str], add: bool) -> None:
         if add:

@@ -136,6 +136,12 @@ def current_language() -> str:
 
 RU.update(
     {
+        "ui.curves.auto": "Авто",
+        "ui.curves.auto_tip": "Сбросить ручной порог",
+    }
+)
+RU.update(
+    {
         "ui.curves.amp": "Амплификация",
         "ui.curves.log": "Амплификация, логарифм",
         "ui.curves.melt": "Плавление",
