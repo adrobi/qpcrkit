@@ -143,9 +143,7 @@ def test_window_excludes_the_reaction_of_that_target_only(demo):
     point = _click_point(demo.std, 0)
     rxns = demo.editor.project.run(point.run_id).wells[point.coord].reactions
     assert [r.excluded for r in rxns if r.target == "IL6"] == [True]
-    assert point.coord in demo.statusBar().currentMessage()
-    demo.recalculate_now()
-    assert point.coord in demo.statusBar().currentMessage()  # the recalculation does not wipe the note
+    assert point.coord in demo.statusBar().currentMessage()  # shown by the recalculation the click starts
     assert len(demo.results.std_curves[(None, "IL6")].points) == before - 1
 
 
