@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 
-from .models import Project, Reaction, Sample, Target
+from .models import PLATE_FORMATS, Project, Reaction, Sample, Target, format_coord
 
 
 def _reactions(project: Project, run_id: str, coords: list[str], target: str | None) -> list[Reaction]:
@@ -68,6 +68,70 @@ def update_settings(project: Project, **changes) -> None:
         if key not in names:
             raise AttributeError(f"Unknown setting: {key}")
         setattr(project.settings, key, value)
+
+
+def set_target(project: Project, run_id: str, coords: list[str], target: str, fluor: str | None = None) -> None:
+    target = target.strip()
+    if not target:
+        return
+    wells = project.run(run_id).wells
+    for c in coords:
+        for r in wells[c].reactions:
+            if fluor is None or r.fluor == fluor:
+                r.target = target
+    project.targets.setdefault(target, Target(target))
+    project.prune_orphans()
+
+
+def rename_target_in_run(project: Project, run_id: str, old: str, new: str) -> None:
+    """"All SYBR on this plate is GAPDH": settings go along, and a reference stays a reference."""
+    new = new.strip()
+    if not new or new == old:
+        return
+    run = project.run(run_id)
+    for well in run.wells.values():
+        for r in well.reactions:
+            if r.target == old:
+                r.target = new
+    source = project.targets.get(old)
+    if new not in project.targets:
+        project.targets[new] = dataclasses.replace(source, name=new) if source else Target(new)
+    elif source and source.kind == "reference":
+        project.targets[new].kind = "reference"
+    project.prune_orphans()
+
+
+def fill_series(
+    project: Project, run_id: str, coords: list[str], prefix: str, start: int = 1, replicates: int = 1
+) -> None:
+    """Name wells in order: Ctrl-1 three times, Ctrl-2 three times, and so on."""
+    wells = project.run(run_id).wells
+    for i, c in enumerate(coords):
+        name = f"{prefix}{start + i // max(replicates, 1)}"
+        wells[c].sample = name
+        project.samples.setdefault(name, Sample(name))
+    project.prune_orphans()
+
+
+def apply_plate_map(project: Project, run_id: str, rows: list[list[str]]) -> int:
+    """A sample table shaped like the plate, as pasted from a spreadsheet; empty cells change nothing."""
+    run = project.run(run_id)
+    shape = PLATE_FORMATS.get(run.plate_format)
+    if shape is None or not rows:
+        return 0
+    cells = [[c.strip() for c in row] for row in rows]
+    if [c for c in cells[0][1:] if c][:2] == ["1", "2"]:  # column numbers and row letters copied too
+        cells = [row[1:] for row in cells[1:]]
+    changed = 0
+    for r, row in enumerate(cells[: shape[0]]):
+        for c, name in enumerate(row[: shape[1]]):
+            well = run.wells.get(format_coord(r, c))
+            if name and well is not None:
+                well.sample = name
+                project.samples.setdefault(name, Sample(name))
+                changed += 1
+    project.prune_orphans()
+    return changed
 
 
 def clone_project(p: Project) -> Project:

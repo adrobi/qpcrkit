@@ -14,6 +14,8 @@ def check_reactions(project: Project) -> list[Flag]:
     flags: list[Flag] = []
     # key -> list of (coord, cq or None)
     groups: dict[tuple, list[tuple[str, float | None]]] = defaultdict(list)
+    nrt: list[tuple[str, str, str | None, str, float]] = []
+    unnamed: set[tuple[str, str]] = set()
 
     for run, well, rxn in project.iter_reactions():
         if rxn.excluded:
@@ -24,13 +26,25 @@ def check_reactions(project: Project) -> list[Flag]:
             continue
         if rxn.role == "unknown" and rxn.cq is not None and rxn.cq >= s.late_cq:
             flags.append(Flag("info", "late_amplification", {"cq": rxn.cq}, run.id, (well.coord,), rxn.target, well.sample))
+        if rxn.role == "nrt":
+            if rxn.cq is not None:
+                nrt.append((run.id, rxn.target, well.sample, well.coord, rxn.cq))
+            continue
         if rxn.role == "std":
-            key = (run.id, rxn.target, None, rxn.quantity)
+            if rxn.quantity is None:  # no level to group by
+                continue
+            key = (run.id, rxn.target, "std", None, rxn.quantity)
+        elif not well.sample:  # unnamed wells are not replicates of each other
+            unnamed.add((run.id, well.coord))
+            continue
         else:
-            key = (run.id, rxn.target, well.sample, None)
+            key = (run.id, rxn.target, rxn.role, well.sample, None)
         groups[key].append((well.coord, rxn.cq))
 
-    for (run_id, target, sample, _q), reps in groups.items():
+    if unnamed:
+        flags.append(Flag("info", "wells_without_sample", {"count": len(unnamed)}))
+
+    for (run_id, target, _role, sample, _q), reps in groups.items():
         values = [cq for _, cq in reps if cq is not None]
         coords = tuple(c for c, _ in reps)
         if values and len(values) < len(reps):
@@ -47,4 +61,10 @@ def check_reactions(project: Project) -> list[Flag]:
                 flags.append(
                     Flag("warning", "outlier_suggested", {"cq": cq, "median": median}, run_id, (coord,), target, sample)
                 )
+    for run_id, target, sample, coord, cq in nrt:
+        values = [v for _, v in groups.get((run_id, target, "unknown", sample, None), []) if v is not None]
+        if not values or cq - statistics.fmean(values) < s.nrt_min_delta:
+            flags.append(
+                Flag("warning", "nrt_amplified", {"cq": cq, "delta": s.nrt_min_delta}, run_id, (coord,), target, sample)
+            )
     return flags

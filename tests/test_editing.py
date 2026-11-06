@@ -114,3 +114,102 @@ def test_curves_are_shared_in_undo_snapshots():
     ed.set_group(p, "s1", "LPS")
     assert not snap.run("R1").wells["A1"].reactions[0].excluded
     assert "s1" not in snap.samples
+
+
+def _sybr():
+    p = make_project([
+        ("R1", "A1", None, "SYBR", "unknown", 20.0, None),
+        ("R1", "A2", None, "SYBR", "unknown", 21.0, None),
+        ("R2", "A1", None, "SYBR", "unknown", 22.0, None),
+    ])
+    for _, _, r in p.iter_reactions():
+        r.fluor = "SYBR"
+    return p
+
+
+def test_unassigned_targets():
+    p = _sybr()
+    assert p.unassigned_targets() == [("R1", "A1"), ("R1", "A2"), ("R2", "A1")]
+    ed.set_target(p, "R1", ["A1"], "GAPDH")
+    assert ("R1", "A1") not in p.unassigned_targets()
+
+
+def test_set_target_prunes_only_unused():
+    p = _sybr()
+    ed.set_target(p, "R1", ["A1", "A2"], "GAPDH")
+    assert "GAPDH" in p.targets and "SYBR" in p.targets  # R2 still uses it
+    ed.set_target(p, "R2", ["A1"], "GAPDH")
+    assert "SYBR" not in p.targets
+
+
+def test_set_target_with_fluor_touches_one_reaction():
+    p = _p()
+    p.run("R1").wells["A1"].reactions[0].fluor = "FAM"
+    p.run("R1").wells["A1"].reactions[1].fluor = "VIC"
+    ed.set_target(p, "R1", ["A1"], "X", fluor="VIC")
+    assert [r.target for r in p.run("R1").wells["A1"].reactions] == ["GAPDH", "X"]
+
+
+def test_rename_keeps_settings():
+    p = _sybr()
+    p.targets["SYBR"].efficiency_manual = 0.95
+    ed.rename_target_in_run(p, "R1", "SYBR", "GAPDH")
+    assert p.targets["GAPDH"].efficiency_manual == 0.95
+    assert p.run("R2").wells["A1"].reactions[0].target == "SYBR"
+
+
+def test_rename_into_existing_merges_and_keeps_reference():
+    p = _sybr()
+    ed.set_target(p, "R2", ["A1"], "GAPDH")
+    p.targets["SYBR"].kind = "reference"
+    ed.rename_target_in_run(p, "R1", "SYBR", "GAPDH")
+    assert p.targets["GAPDH"].kind == "reference"
+    assert "SYBR" not in p.targets
+    assert {r.target for _, _, r in p.iter_reactions()} == {"GAPDH"}
+
+
+def test_fill_series():
+    p = make_project([("R1", f"A{i}", None, "IL6", "unknown", 20.0, None) for i in range(1, 7)])
+    ed.fill_series(p, "R1", [f"A{i}" for i in range(1, 7)], "Ctrl-", replicates=3)
+    wells = p.run("R1").wells
+    assert [wells[f"A{i}"].sample for i in range(1, 7)] == ["Ctrl-1"] * 3 + ["Ctrl-2"] * 3
+    ed.fill_series(p, "R1", ["A1", "A2"], "S", start=5)
+    assert wells["A2"].sample == "S6"
+
+
+def test_apply_plate_map():
+    p = make_project([("R1", "A1", "old", "IL6", "unknown", 20.0, None), ("R1", "B2", None, "IL6", "unknown", 20.0, None)])
+    rows = [["", "x"] + [""] * 20, ["", "s2", "extra"]] + [["z"]] * 20
+    assert ed.apply_plate_map(p, "R1", rows) == 1  # only B2 exists and is filled; A1 keeps its sample
+    assert p.run("R1").wells["B2"].sample == "s2"
+    assert p.run("R1").wells["A1"].sample == "old"
+
+
+def test_plate_map_with_headers():
+    p = make_project([("R1", "B2", None, "IL6", "unknown", 20.0, None)])
+    rows = [[""] + [str(i) for i in range(1, 13)], ["A"] + [""] * 12, ["B", "", "s2"]]
+    assert ed.apply_plate_map(p, "R1", rows) == 1
+    assert p.run("R1").wells["B2"].sample == "s2"
+
+
+def test_plate_map_ignored_on_rotor():
+    p = make_project([("R1", "1", None, "IL6", "unknown", 20.0, None)])
+    p.runs[0].plate_format = 72
+    assert ed.apply_plate_map(p, "R1", [["s"]]) == 0
+
+
+def test_samples_with_a_group_survive_pruning():
+    p = _sybr()
+    ed.apply_sample_table(p, [["later", "LPS"]])
+    p.prune_orphans()
+    assert p.samples["later"].group == "LPS"
+
+
+def test_orphan_cleanup_undone_by_history():
+    p = _sybr()
+    h = ed.EditHistory()
+    h.record(p)
+    ed.set_target(p, "R1", ["A1", "A2"], "G")
+    ed.set_target(p, "R2", ["A1"], "G")
+    assert "SYBR" not in p.targets
+    assert "SYBR" in h.undo(p).targets

@@ -118,6 +118,7 @@ class Settings:
     eff_max: float = 1.10
     r2_min: float = 0.98
     pool_std_runs: bool = True
+    nrt_min_delta: float = 5.0  # cycles between a sample and its no-RT control
 
 
 @dataclass
@@ -138,6 +139,24 @@ class Project:
             if run.id == run_id:
                 return run
         raise KeyError(run_id)
+
+    def prune_orphans(self) -> None:
+        """Drop targets no reaction uses, and unnamed-group samples no well uses.
+
+        A sample with a group is the user's data: its well may be named later.
+        """
+        used_targets = {r.target for _, _, r in self.iter_reactions()}
+        self.targets = {k: v for k, v in self.targets.items() if k in used_targets}
+        used_samples = {w.sample for run in self.runs for w in run.wells.values()}
+        self.samples = {k: v for k, v in self.samples.items() if k in used_samples or v.group}
+
+    def unassigned_targets(self) -> list[tuple[str, str]]:
+        """Wells whose target is empty or just the dye's name: (run_id, coord)."""
+        seen: list[tuple[str, str]] = []
+        for run, well, r in self.iter_reactions():
+            if (not r.target or r.target == r.fluor) and (run.id, well.coord) not in seen:
+                seen.append((run.id, well.coord))
+        return seen
 
     def ensure_targets_and_samples(self) -> None:
         for _run, well, rxn in self.iter_reactions():

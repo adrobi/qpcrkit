@@ -65,3 +65,55 @@ def test_standards_grouped_by_quantity():
         ("R1", "A3", None, "IL6", "std", 23.3, 10.0),
     ])
     assert check_reactions(p) == []
+
+
+def test_wells_without_sample_are_not_replicates():
+    p = make_project([("R1", f"A{i}", None, "SYBR", "unknown", 15.0 + i, None) for i in range(1, 10)])
+    flags = check_reactions(p)
+    assert _codes(flags) == ["wells_without_sample"]
+    assert flags[0].severity == "info" and flags[0].params == {"count": 9}
+
+
+def _nrt(sample_cq, nrt_cq):
+    return make_project([
+        ("R1", "A1", "s1", "IL6", "unknown", sample_cq, None),
+        ("R1", "A2", "s1", "IL6", "unknown", sample_cq, None),
+        ("R1", "A3", "s1", "IL6", "nrt", nrt_cq, None),
+    ])
+
+
+def test_nrt_amplified():
+    flags = check_reactions(_nrt(25.0, 28.0))
+    assert _codes(flags) == ["nrt_amplified"] and flags[0].severity == "warning"
+    assert flags[0].coords == ("A3",) and flags[0].params == {"cq": 28.0, "delta": 5.0}
+
+
+def test_nrt_far_enough_is_clean():
+    assert check_reactions(_nrt(25.0, 33.0)) == []
+
+
+def test_nrt_without_amplification_is_clean():
+    assert check_reactions(_nrt(25.0, None)) == []
+
+
+def test_nrt_with_sample_undetermined_is_flagged():
+    assert _codes(check_reactions(_nrt(None, 30.0))) == ["nrt_amplified"]
+
+
+def test_nrt_does_not_inflate_sample_spread():
+    assert "rep_sd_high" not in _codes(check_reactions(_nrt(25.0, 28.0)))
+
+
+def test_threshold_settings_reach_messages():
+    from i18n import set_language, tr
+    from qpcr_core.stdcurve import fit_std_curves
+
+    set_language("en")
+    p = make_project(
+        [("R1", f"A{i}", None, "IL6", "std", 40 - 3.0 * __import__("math").log10(q), q) for i, q in enumerate((1e4, 1e3, 1e2))],
+        eff_min=0.8,
+        eff_max=1.05,
+    )
+    flag = next(f for f in fit_std_curves(p, lambda run, rxn: rxn.cq)[1] if f.code == "efficiency_out_of_range")
+    text = tr("qc.efficiency_out_of_range", **flag.params)
+    assert "80" in text and "105" in text

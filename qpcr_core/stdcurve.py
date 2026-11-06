@@ -77,9 +77,9 @@ def fit_std_curves(project: Project, cq_of: CqFn) -> tuple[dict[tuple[str | None
             points=sorted(points),
         )
         if not s.eff_min <= eff <= s.eff_max:
-            flags.append(Flag("warning", "efficiency_out_of_range", {"eff": float(eff)}, run_id, target=target))
+            flags.append(Flag("warning", "efficiency_out_of_range", {"eff": float(eff), "min": s.eff_min, "max": s.eff_max}, run_id, target=target))
         if r2 < s.r2_min:
-            flags.append(Flag("warning", "r2_low", {"r2": r2}, run_id, target=target))
+            flags.append(Flag("warning", "r2_low", {"r2": r2, "min": s.r2_min}, run_id, target=target))
     return curves, flags
 
 
