@@ -7,7 +7,15 @@ from dataclasses import dataclass, field
 from statistics import fmean
 
 from .calibration import calibration_factors, corrected_cq
-from .curves import CurveKey, CurveResult, analyze_curves, run_uses_calculated, source_flags, target_efficiencies
+from .curves import (
+    CurveKey,
+    CurveResult,
+    analyze_curves,
+    curve_flags,
+    run_uses_calculated,
+    source_flags,
+    target_efficiencies,
+)
 from .flags import Flag
 from .models import Project, Reaction, Run, Well
 from .qc import check_reactions
@@ -61,6 +69,7 @@ def analyze(project: Project) -> Results:
     factors, cal_flags = calibration_factors(project, raw_cq_of)
     flags += cal_flags
     flags += source_flags(project, curve_results, factors)
+    flags += curve_flags(project, curve_results, raw_cq_of)
 
     def cq_of(run: Run, well: Well, rxn: Reaction) -> float | None:
         cq = raw_cq_of(run, well, rxn)

@@ -121,6 +121,9 @@ class Settings:
     pool_std_runs: bool = True
     nrt_min_delta: float = 5.0  # cycles between a sample and its no-RT control
     cq_source: str = "instrument"  # instrument | calculated
+    tm_shift_max: float = 1.0  # degrees from the median Tm of a target on a run
+    early_cq: float = 10.0  # below this a Cq leaves too few cycles for a baseline
+    cq_disagree_max: float = 0.5  # cycles between our Cq and the instrument Cq, beyond their usual shift
 
 
 @dataclass

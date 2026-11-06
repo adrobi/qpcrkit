@@ -309,3 +309,107 @@ def test_defaults_do_not_change_results_on_a_real_file():
         ]
         assert mean == pytest.approx(sum(rx) / len(rx))
     assert res.curves  # the curves were analysed all the same
+
+
+# --- QC from curves ---
+
+
+def _melts(tms=(84.0, 84.1, 83.9, 84.0), **kw):
+    return [(*r, melt(tm=tms[i], **kw)) for i, r in enumerate(_plate())]
+
+
+def _flags(res, code):
+    return [f for f in res.flags if f.code == code]
+
+
+def test_two_significant_peaks_are_flagged():
+    rows = _melts()
+    rows.append(("R1", "B1", "s", "T", "unknown", None, logistic(25), melt(tm=84.0, second_tm=76.0, second_height=0.5)))
+    flag = _flags(analyze(_project(rows)), "melt_multiple_peaks")
+    assert [f.coords for f in flag] == [("B1",)]
+
+
+def test_tm_shift_from_the_median():
+    rows = _melts()
+    rows.append(("R1", "B1", "s", "T", "unknown", None, logistic(25), melt(tm=85.5)))
+    rows.append(("R1", "B2", "s", "T", "unknown", None, logistic(25), melt(tm=84.5)))
+    flags = _flags(analyze(_project(rows)), "melt_tm_shift")
+    assert [f.coords for f in flags] == [("B1",)]
+    assert flags[0].params["tm"] == pytest.approx(85.5, abs=0.2)
+
+
+def test_tm_shift_limit_is_a_setting():
+    rows = _melts()
+    rows.append(("R1", "B2", "s", "T", "unknown", None, logistic(25), melt(tm=84.5)))
+    assert _flags(analyze(_project(rows, tm_shift_max=0.3)), "melt_tm_shift")
+
+
+def test_tm_is_compared_within_a_run():
+    rows = _melts()
+    other = [(*r, melt(tm=88.0)) for r in _plate("R2")]
+    assert not _flags(analyze(_project(rows + other)), "melt_tm_shift")
+
+
+def test_ntc_with_the_product_is_an_error():
+    rows = _melts()
+    rows.append(("R1", "H1", None, "T", "ntc", None, flat(noise=0.002), melt(tm=84.2)))
+    flag = _flags(analyze(_project(rows)), "ntc_melt_product")[0]
+    assert flag.severity == "error" and flag.coords == ("H1",)
+
+
+def test_ntc_with_a_low_peak_is_a_warning():
+    rows = _melts()
+    rows.append(("R1", "H1", None, "T", "ntc", None, flat(noise=0.002), melt(tm=76.0, height=0.5)))
+    res = analyze(_project(rows))
+    flag = _flags(res, "ntc_melt_other")[0]
+    assert flag.severity == "warning"
+    assert not _flags(res, "ntc_melt_product")
+
+
+def test_flat_ntc_raises_no_melt_flags():
+    rows = _melts()
+    rows.append(("R1", "H1", None, "T", "ntc", None, flat(noise=0.002), melt(height=0.0, noise=0.002)))
+    codes = _codes(analyze(_project(rows)))
+    assert not {"ntc_melt_product", "ntc_melt_other", "melt_multiple_peaks", "melt_tm_shift"} & set(codes)
+
+
+def _disagree(shifts, cqs=(20, 22, 24, 26, 28)):
+    rows = [("R1", f"A{i + 1}", f"s{i}", "T", "unknown", None, logistic(c)) for i, c in enumerate(cqs[: len(shifts)])]
+    p = _project(rows)
+    ours = analyze(p).curves
+    for i, s in enumerate(shifts):
+        p.runs[0].wells[f"A{i + 1}"].reactions[0].cq = ours[_key("R1", f"A{i + 1}")].cq_calc + s
+    return analyze(p)
+
+
+def test_cq_that_disagrees_with_the_rest_is_flagged():
+    flags = _flags(_disagree((0.0, 0.0, 0.0, 0.0, 0.8)), "cq_source_disagree")
+    assert [f.coords for f in flags] == [("A5",)]
+
+
+def test_constant_shift_is_not_a_disagreement():
+    assert not _flags(_disagree((1.5, 1.5, 1.5, 1.5, 1.5)), "cq_source_disagree")
+
+
+def test_two_reactions_are_too_few_to_compare():
+    assert not _flags(_disagree((0.0, 2.0)), "cq_source_disagree")
+
+
+def test_early_cq():
+    rows = _plate(cqs=(12, 14)) + [("R1", "B1", "e", "T", "unknown", None, logistic(8))]
+    rows += [("R1", "B2", None, "T", "std", None, logistic(8)), ("R1", "B3", None, "T", "pos", None, logistic(8))]
+    flags = _flags(analyze(_project(rows)), "early_cq")
+    assert [f.coords for f in flags] == [("B1",)]
+
+
+def test_cq_without_amplification():
+    rows = [(*r[:5], 20.0, r[6]) for r in _plate()]
+    rows.append(("R1", "B1", "s", "T", "unknown", 33.0, flat(noise=0.002)))
+    rows.append(("R1", "B2", "x", "T", "unknown", None, flat(noise=0.002)))
+    flags = _flags(analyze(_project(rows)), "no_amplification_with_cq")
+    assert [f.coords for f in flags] == [("B1",)]
+
+
+def test_no_curve_flags_without_curves():
+    p = _project([("R1", f"A{i}", "s", "T", "unknown", 25.0, None) for i in range(4)])
+    assert not {"early_cq", "no_amplification_with_cq", "cq_source_disagree"} & set(_codes(analyze(p)))

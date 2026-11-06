@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -11,7 +12,7 @@ from scipy.ndimage import median_filter
 from scipy.signal import find_peaks, savgol_filter
 
 from .flags import Flag
-from .models import Curve, Project, Reaction, Run, Settings
+from .models import Curve, Project, Reaction, Run, Settings, Well
 
 _MIN_POINTS = 5
 USABLE_EFFICIENCY = (0.5, 1.5)  # outside this a curve is broken (e.g. swapped quantities), not just poor
@@ -421,3 +422,66 @@ def source_flags(project: Project, results: dict[CurveKey, CurveResult], factors
         if len(values) > 1 and not any(k[1] == target for k in factors):
             flags.append(Flag("warning", "thresholds_differ_no_irc", target=target))
     return flags
+
+
+def curve_flags(
+    project: Project,
+    results: dict[CurveKey, CurveResult],
+    raw_cq_of: Callable[[Run, Well, Reaction], float | None],
+) -> list[Flag]:
+    """Checks a Cq table cannot make. Everything is compared within a run and a target."""
+    s = project.settings
+    flags: list[Flag] = []
+    groups: dict[tuple[str, str], list[tuple[Well, Reaction, CurveResult]]] = defaultdict(list)
+    silent: dict[tuple[str, str], list[str]] = defaultdict(list)
+    for run, well, rxn in project.iter_reactions():
+        if rxn.excluded:
+            continue
+        cq = raw_cq_of(run, well, rxn)
+        if cq is not None and cq < s.early_cq and rxn.role not in ("std", "pos", "ntc"):
+            flags.append(Flag("warning", "early_cq", {"cq": cq, "min": s.early_cq}, run.id, (well.coord,), rxn.target, well.sample))
+        view = _amplification_view(rxn.amplification, rxn.baseline_subtracted) if rxn.amplification is not None else None
+        if rxn.cq is not None and view is not None and not view[1]:
+            silent[(run.id, rxn.target)].append(well.coord)
+        result = results.get((run.id, well.coord, rxn.target, rxn.fluor))
+        if result is not None:
+            groups[(run.id, rxn.target)].append((well, rxn, result))
+    flags += [
+        Flag("warning", "no_amplification_with_cq", {"count": len(c)}, run_id, tuple(c), target)
+        for (run_id, target), c in silent.items()
+    ]
+    for (run_id, target), rows in groups.items():
+        flags += _melt_flags(s, run_id, target, rows)
+        flags += _disagreement_flags(s, run_id, target, rows)
+    return flags
+
+
+def _melt_flags(s: Settings, run_id: str, target: str, rows: list[tuple[Well, Reaction, CurveResult]]) -> list[Flag]:
+    flags: list[Flag] = []
+    products = [r for r in rows if r[1].role != "ntc" and r[2].tms and (r[2].cq_calc is not None or r[1].cq is not None)]
+    median = float(np.median([r[2].tms[0] for r in products])) if products else None
+    for well, rxn, result in rows:
+        if rxn.role == "ntc":
+            for tm in result.tms:
+                near = median is not None and abs(tm - median) <= s.tm_shift_max
+                code, severity = ("ntc_melt_product", "error") if near else ("ntc_melt_other", "warning")
+                flags.append(Flag(severity, code, {"tm": tm}, run_id, (well.coord,), target, well.sample))
+            continue
+        if len(result.tms) > 1:
+            flags.append(Flag("warning", "melt_multiple_peaks", {"count": len(result.tms)}, run_id, (well.coord,), target, well.sample))
+        if result.tms and median is not None and abs(result.tms[0] - median) > s.tm_shift_max:
+            flags.append(Flag("warning", "melt_tm_shift", {"tm": result.tms[0], "median": median}, run_id, (well.coord,), target, well.sample))
+    return flags
+
+
+def _disagreement_flags(s: Settings, run_id: str, target: str, rows: list[tuple[Well, Reaction, CurveResult]]) -> list[Flag]:
+    """A constant shift only means another threshold; a reaction apart from the others means trouble."""
+    pairs = [(w, r.cq - c.cq_calc) for w, r, c in rows if r.cq is not None and c.cq_calc is not None and r.role != "ntc"]
+    if len(pairs) < 3:
+        return []
+    median = float(np.median([d for _, d in pairs]))
+    return [
+        Flag("warning", "cq_source_disagree", {"delta": d - median, "limit": s.cq_disagree_max}, run_id, (w.coord,), target, w.sample)
+        for w, d in pairs
+        if abs(d - median) > s.cq_disagree_max
+    ]
