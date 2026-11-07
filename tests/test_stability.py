@@ -425,3 +425,113 @@ def test_choice_can_be_undone():
     history.record(p)
     set_stability_candidate(p, "T", True)
     assert history.undo(p).targets["T"].stability_candidate is None
+
+
+# --- figures and export ---
+
+
+def _stab_results(shift=3.0, refs=("R1", "R2", "R3")):
+    p = _three_refs(shift_lps=shift, refs=refs)
+    return p, analyze(p)
+
+
+def test_genorm_figure():
+    from qpcr_core.figures import genorm_figure
+
+    _, res = _stab_results()
+    s = res.stability
+    fig = genorm_figure(s)
+    steps_axis, v_axis = fig.axes
+    assert len(steps_axis.lines[0].get_xdata()) == len(s.genorm_steps)
+    assert len(v_axis.patches) == len(s.pairwise_v)
+    assert any(list(line.get_ydata()) == [0.15, 0.15] for line in v_axis.lines)
+
+
+def test_genorm_figure_without_v_has_one_axis():
+    from qpcr_core.figures import genorm_figure
+
+    _, res = _stab_results(refs=("R1", "R2"))
+    assert len(genorm_figure(res.stability).axes) == 1
+
+
+def test_normfinder_figure_best_on_top():
+    from qpcr_core.figures import normfinder_figure
+
+    _, res = _stab_results()
+    s = res.stability
+    ax = normfinder_figure(s).axes[0]
+    assert len(ax.patches) == 3
+    labels = [t.get_text() for t in ax.get_yticklabels()]
+    assert labels[-1] == min(s.normfinder_rho, key=s.normfinder_rho.get)  # barh draws the last label on top
+
+
+def test_stability_figures_follow_the_style():
+    from matplotlib.colors import to_hex
+
+    from qpcr_core.figures import genorm_figure
+
+    _, res = _stab_results()
+    style = {"text.color": "#e6efed"}
+    assert to_hex(genorm_figure(res.stability, style=style).axes[0].lines[0].get_color()) == "#e6efed"
+
+
+def test_stability_sheet(tmp_path):
+    import openpyxl
+
+    from i18n import tr
+    from qpcr_core.export import export_xlsx
+
+    p, res = _stab_results()
+    path = tmp_path / "s.xlsx"
+    export_xlsx(p, res, path)
+    rows = list(openpyxl.load_workbook(path)[tr("sheet.stability")].iter_rows(values_only=True))
+    blocks = {r[0] for r in rows[1:]}
+    assert {"geNorm", "geNorm steps", "V", "NormFinder", "Recommended", "Best pair"} <= blocks
+    m = {r[1]: r[2] for r in rows if r[0] == "geNorm"}
+    assert m["R3"] == pytest.approx(res.stability.genorm_m["R3"])
+
+
+def test_no_stability_sheet_without_a_ranking(tmp_path):
+    import openpyxl
+
+    from i18n import tr
+    from qpcr_core.export import export_xlsx
+
+    p = demo_project()
+    path = tmp_path / "s.xlsx"
+    export_xlsx(p, analyze(p), path)
+    assert tr("sheet.stability") not in openpyxl.load_workbook(path).sheetnames
+
+
+def test_stability_in_the_html_report(tmp_path):
+    from i18n import tr
+    from qpcr_core.export import export_html
+
+    p, res = _stab_results()
+    path = tmp_path / "s.html"
+    export_html(p, res, path)
+    text = path.read_text(encoding="utf-8")
+    section = text[text.index(tr("sheet.stability")):]
+    assert section.count("<svg") >= 2 and "R3" in section
+
+
+def test_cli_saves_the_stability_figures(tmp_path):
+    from qpcr_cli import main
+
+    p, _ = _stab_results()
+    project = tmp_path / "p.qpcrkit.json"
+    save_project(p, project)
+    out = tmp_path / "figs"
+    assert main(["analyze", str(project), "--figures", str(out)]) == 0
+    assert (out / "stability_genorm.svg").exists() and (out / "stability_normfinder.svg").exists()
+
+
+def test_two_candidates_save_genorm_only(tmp_path):
+    from qpcr_cli import main
+
+    p, _ = _stab_results(refs=("R1", "R2"))
+    project = tmp_path / "p.qpcrkit.json"
+    save_project(p, project)
+    out = tmp_path / "figs"
+    assert main(["analyze", str(project), "--figures", str(out)]) == 0
+    assert (out / "stability_genorm.svg").exists() and not (out / "stability_normfinder.svg").exists()

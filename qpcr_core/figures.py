@@ -16,6 +16,7 @@ from matplotlib.lines import Line2D
 from .curves import derivative_curve, subtracted_curve
 from .models import Curve, Project, Reaction
 from .pipeline import Results
+from .stability import V_CUTOFF, StabilityResult
 from .stdcurve import StdCurve
 
 _FORMATS = {".svg": "svg", ".pdf": "pdf", ".png": "png"}
@@ -191,6 +192,53 @@ def expression_figure(
             ax.axhline(0, color=_ink(style, "0.5"), lw=0.8)
         ax.set_title(target)
     return fig
+
+
+def genorm_figure(result: StabilityResult, style: dict | None = None) -> Figure:
+    """Mean M while the least stable gene is excluded step by step; beside it V(n/n+1) with the 0.15 line."""
+    with matplotlib.rc_context(style or {}):
+        fig = Figure(layout="constrained")
+        has_v = bool(result.pairwise_v)
+        ax = fig.add_subplot(1, 2, 1) if has_v else fig.add_subplot()
+        counts = [len(remaining) for remaining, _ in result.genorm_steps]
+        ax.plot(range(len(counts)), [m for _, m in result.genorm_steps], marker="o", color=_ink(style, "0.2"), lw=1)
+        ax.set_xticks(range(len(counts)), [str(n) for n in counts])
+        ax.set_xlabel("Genes left")
+        ax.set_ylabel("Mean M")
+        ax.set_title("geNorm")
+        if has_v:
+            vax = fig.add_subplot(1, 2, 2)
+            pairs = sorted(result.pairwise_v)
+            vax.bar(range(len(pairs)), [result.pairwise_v[n] for n in pairs], color=BAR_COLOR, alpha=0.75, width=0.6)
+            vax.axhline(V_CUTOFF, color=_ink(style, "0.3"), ls="--", lw=0.8)
+            vax.set_xticks(range(len(pairs)), [f"V{n}/{n + 1}" for n in pairs], rotation=45, ha="right")
+            vax.set_ylabel("Pairwise variation V")
+    return fig
+
+
+def normfinder_figure(result: StabilityResult, style: dict | None = None) -> Figure:
+    """Stability values, the most stable gene on top."""
+    with matplotlib.rc_context(style or {}):
+        fig = Figure(layout="constrained")
+        ax = fig.add_subplot()
+        genes = sorted(result.normfinder_rho, key=result.normfinder_rho.get, reverse=True)
+        ax.barh(range(len(genes)), [result.normfinder_rho[g] for g in genes], color=BAR_COLOR, alpha=0.75, height=0.6)
+        ax.set_yticks(range(len(genes)), genes)
+        ax.set_xlabel("Stability value \u03c1")
+        ax.set_title("NormFinder" + ("" if result.groups_used else " (no groups)"))
+    return fig
+
+
+def stability_figure_files(result: StabilityResult | None) -> list[tuple[str, Figure]]:
+    """The stability figures worth saving: a method that was not computed has none."""
+    if result is None:
+        return []
+    files = []
+    if result.genorm_m:
+        files.append(("stability_genorm.svg", genorm_figure(result)))
+    if result.normfinder_rho:
+        files.append(("stability_normfinder.svg", normfinder_figure(result)))
+    return files
 
 
 def save_figure(fig: Figure, path: str | os.PathLike, width_mm: float = 90, height_mm: float = 70, dpi: int = 300) -> None:

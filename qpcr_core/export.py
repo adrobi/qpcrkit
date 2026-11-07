@@ -16,7 +16,7 @@ from openpyxl.utils import get_column_letter
 import qpcr_core
 from i18n import tr
 
-from .figures import amplification_figure, expression_figure, melt_figure, std_curve_figure
+from .figures import amplification_figure, expression_figure, melt_figure, stability_figure_files, std_curve_figure
 from .flags import flag_text
 from .models import Project
 from .pipeline import Results
@@ -66,6 +66,29 @@ def _curve_rows(project: Project, results: Results) -> list[list]:
     return rows
 
 
+STABILITY_COLUMNS = ["Block", "Gene or step", "Value", "Rank"]
+
+
+def _has_ranking(results: Results) -> bool:
+    s = results.stability
+    return s is not None and bool(s.genorm_m or s.normfinder_rho)
+
+
+def _stability_rows(s) -> list[list]:
+    rows: list[list] = [["geNorm", gene, s.genorm_m[gene], i + 1] for i, gene in enumerate(s.candidates) if gene in s.genorm_m]
+    rows += [["geNorm steps", ", ".join(remaining), mean_m, None] for remaining, mean_m in s.genorm_steps]
+    rows += [["V", f"V{n}/{n + 1}", v, None] for n, v in sorted(s.pairwise_v.items())]
+    ranked = sorted(s.normfinder_rho, key=s.normfinder_rho.get)
+    rows += [["NormFinder", gene, s.normfinder_rho[gene], i + 1] for i, gene in enumerate(ranked)]
+    if s.recommended:
+        rows.append(["Recommended", ", ".join(s.recommended), len(s.recommended), None])
+    if s.best_pair:
+        rows.append(["Best pair", ", ".join(s.best_pair), s.best_pair_rho, None])
+    rows += [["Excluded samples", name, None, None] for name in s.excluded_samples]
+    rows += [["Notes", tr(f"stab.note.{code}"), None, None] for code in s.notes]
+    return rows
+
+
 def export_xlsx(project: Project, results: Results, path: str | os.PathLike) -> None:
     wb = Workbook()
     wb.remove(wb.active)
@@ -106,6 +129,9 @@ def export_xlsx(project: Project, results: Results, path: str | os.PathLike) -> 
 
     if results.curves:
         _sheet(wb, "sheet.curves", CURVE_COLUMNS, _curve_rows(project, results))
+
+    if _has_ranking(results):
+        _sheet(wb, "sheet.stability", STABILITY_COLUMNS, _stability_rows(results.stability))
 
     s = project.settings
     params: list[list] = [["qpcrkit version", qpcr_core.__version__]]
@@ -189,6 +215,12 @@ def export_html(project: Project, results: Results, path: str | os.PathLike) -> 
         parts.append(f"<h2>{html.escape(tr('sheet.std'))}</h2>")
         for curve in results.std_curves.values():
             parts.append(_svg(std_curve_figure(curve)))
+
+    if _has_ranking(results):
+        parts.append(f"<h2>{html.escape(tr('sheet.stability'))}</h2>")
+        for _name, fig in stability_figure_files(results.stability):
+            parts.append(_svg(fig))
+        parts.append(_table(STABILITY_COLUMNS, _stability_rows(results.stability)))
 
     if results.curves:
         parts.append(f"<h2>{html.escape(tr('sheet.curves'))}</h2>")

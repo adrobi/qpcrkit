@@ -136,6 +136,7 @@ def _analyze(args: argparse.Namespace) -> int:
                 melt_figure,
                 safe_name,
                 save_figure,
+                stability_figure_files,
                 std_curve_figure,
             )
 
@@ -152,6 +153,8 @@ def _analyze(args: argparse.Namespace) -> int:
                     save_figure(amplification_figure(project, res, run.id), out / f"amplification_{safe_name(run.id)}.svg")
                 if any(r.melt is not None or r.melt_derivative is not None for r in reactions):
                     save_figure(melt_figure(project, res, run.id), out / f"melt_{safe_name(run.id)}.svg")
+            for name, fig in stability_figure_files(res.stability):
+                save_figure(fig, out / name)
             outputs.append(str(out))
     except OSError as exc:
         print(tr("cli.file_error", error=exc), file=sys.stderr)

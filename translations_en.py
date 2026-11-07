@@ -53,6 +53,18 @@ EN: dict[str, str] = {
 
 EN.update(
     {
+        "sheet.stability": "Stability",
+        "stab.note.few_candidates": "At least two candidates are needed",
+        "stab.note.few_candidates_normfinder": "NormFinder needs at least three candidates",
+        "stab.note.few_samples": "At least three samples with a Cq of every candidate are needed",
+        "stab.note.no_groups": "No groups or too small ones: NormFinder took only the spread within a group",
+        "stab.note.small_groups": "Groups of one sample are left out of NormFinder",
+        "stab.note.ungrouped_samples": "Samples without a group are left out of NormFinder",
+        "stab.note.v_never_below": "V never falls below 0.15: take all candidates",
+    }
+)
+EN.update(
+    {
         "qc.reference_unstable": "The reference gene is not stable in this experiment: M = {m:.2f}, limit {limit:.2f}",
         "qc.single_reference": "One reference gene: MIQE recommends at least two, so that their stability can be checked",
         "qc.stability_samples_excluded": "Samples without a Cq of a reference candidate: {count}. They are left out of the stability ranking",

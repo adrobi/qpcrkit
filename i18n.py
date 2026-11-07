@@ -136,6 +136,18 @@ def current_language() -> str:
 
 RU.update(
     {
+        "sheet.stability": "Стабильность",
+        "stab.note.few_candidates": "Нужно минимум два кандидата",
+        "stab.note.few_candidates_normfinder": "NormFinder нужно минимум три кандидата",
+        "stab.note.few_samples": "Нужно минимум три образца с Cq всех кандидатов",
+        "stab.note.no_groups": "Группы не заданы или малы: NormFinder учёл только разброс внутри группы",
+        "stab.note.small_groups": "Группы из одного образца в NormFinder не учтены",
+        "stab.note.ungrouped_samples": "Образцы без группы в NormFinder не учтены",
+        "stab.note.v_never_below": "V ни разу не опускается ниже 0,15: возьмите всех кандидатов",
+    }
+)
+RU.update(
+    {
         "qc.reference_unstable": "Референсный ген нестабилен в этом эксперименте: M = {m:.2f}, порог {limit:.2f}",
         "qc.single_reference": "Один референсный ген: MIQE рекомендует минимум два, тогда их стабильность можно проверить",
         "qc.stability_samples_excluded": "Образцов без Cq одного из кандидатов в референсы: {count}. В оценку стабильности они не вошли",

@@ -42,7 +42,15 @@ from qpcr_core.editing import (
     update_settings,
 )
 from qpcr_core.export import export_csv, export_html, export_xlsx
-from qpcr_core.figures import amplification_figure, expression_figure, melt_figure, safe_name, save_figure, std_curve_figure
+from qpcr_core.figures import (
+    amplification_figure,
+    expression_figure,
+    melt_figure,
+    safe_name,
+    save_figure,
+    stability_figure_files,
+    std_curve_figure,
+)
 from qpcr_core.hints import next_hint
 from qpcr_core.importers.base import UnknownFormatError, UnsupportedFileError, add_report
 from qpcr_core.importers.detect import import_files
@@ -691,6 +699,8 @@ class MainWindow(QMainWindow):
                         save_figure(amplification_figure(project, results, run.id), out / f"amplification_{safe_name(run.id)}.svg")
                     if any(r.melt is not None or r.melt_derivative is not None for r in rxns):
                         save_figure(melt_figure(project, results, run.id), out / f"melt_{safe_name(run.id)}.svg")
+                for name, fig in stability_figure_files(results.stability):
+                    save_figure(fig, out / name)
             else:
                 raise ValueError(kind)
         except OSError as exc:
