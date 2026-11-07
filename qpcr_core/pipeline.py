@@ -20,6 +20,7 @@ from .flags import Flag
 from .models import Project, Reaction, Run, Well
 from .qc import check_reactions
 from .relquant import SampleRQ, efficiencies_with_source, relative_quantities
+from .stability import StabilityResult, analyze_stability, reference_flags
 from .stats import Comparison, GroupSummary, compare, summarize
 from .stdcurve import StdCurve, fit_std_curves, quantify
 
@@ -48,6 +49,7 @@ class Results:
     comparisons: list[Comparison]
     curves: dict[CurveKey, CurveResult] = field(default_factory=dict)
     curve_efficiency: dict[str, float] = field(default_factory=dict)  # shown whatever efficiency_mode is
+    stability: StabilityResult | None = None
 
     def flags_by_severity(self, severity: str) -> list[Flag]:
         return [f for f in self.flags if f.severity == severity]
@@ -104,6 +106,8 @@ def analyze(project: Project) -> Results:
 
     eff, eff_source, eff_flags = efficiencies_with_source(project, std_curves, curve_results)
     flags += eff_flags
+    stability, stability_flags = analyze_stability(project, mean_cq, eff)
+    flags += stability_flags + reference_flags(project, mean_cq, eff)
     rqs, rq_flags = relative_quantities(project, mean_cq, eff)
     flags += rq_flags
     comparisons, stat_flags = compare(rqs, project.settings.control_group, project.settings.test)
@@ -122,4 +126,5 @@ def analyze(project: Project) -> Results:
         comparisons=comparisons,
         curves=curve_results,
         curve_efficiency=target_efficiencies(project, curve_results),
+        stability=stability,
     )

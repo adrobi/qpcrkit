@@ -134,6 +134,13 @@ def tr(key: str, **kwargs) -> str:
 def current_language() -> str:
     return _lang
 
+RU.update(
+    {
+        "qc.reference_unstable": "Референсный ген нестабилен в этом эксперименте: M = {m:.2f}, порог {limit:.2f}",
+        "qc.single_reference": "Один референсный ген: MIQE рекомендует минимум два, тогда их стабильность можно проверить",
+        "qc.stability_samples_excluded": "Образцов без Cq одного из кандидатов в референсы: {count}. В оценку стабильности они не вошли",
+    }
+)
 RU.update({"act.rename_target": "Переименовать мишень на планшете…", "ui.rename_from": "Мишень на этом планшете:", "ui.rename_to": "Новое имя:"})
 RU.update({"ui.bad_quantity": "Количество должно быть положительным числом"})
 RU.update(

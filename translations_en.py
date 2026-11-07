@@ -51,6 +51,13 @@ EN: dict[str, str] = {
     "sheet.params": "Analysis parameters",
 }
 
+EN.update(
+    {
+        "qc.reference_unstable": "The reference gene is not stable in this experiment: M = {m:.2f}, limit {limit:.2f}",
+        "qc.single_reference": "One reference gene: MIQE recommends at least two, so that their stability can be checked",
+        "qc.stability_samples_excluded": "Samples without a Cq of a reference candidate: {count}. They are left out of the stability ranking",
+    }
+)
 EN.update({"act.rename_target": "Rename a target on this plate…", "ui.rename_from": "Target on this plate:", "ui.rename_to": "New name:"})
 EN.update({"ui.bad_quantity": "The quantity must be a positive number"})
 EN.update(

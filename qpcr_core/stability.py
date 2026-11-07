@@ -11,6 +11,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .flags import Flag
+from .models import Project
+
 V_CUTOFF = 0.15  # Vandesompele 2002: a further reference gene adds little below this
 
 
@@ -139,3 +142,101 @@ def normfinder_best_pair(result: NormFinderResult, genes: list[str]) -> tuple[tu
     if best is None:
         raise ValueError("a pair needs at least 2 genes")
     return best[1], best[0]
+
+
+
+# --- one project ---
+
+
+@dataclass(frozen=True)
+class StabilityResult:
+    candidates: tuple[str, ...]  # geNorm ranking, best first; as chosen when geNorm was not computed
+    samples: tuple[str, ...]
+    excluded_samples: tuple[str, ...]
+    genorm_m: dict[str, float]
+    genorm_steps: tuple[tuple[tuple[str, ...], float], ...]
+    pairwise_v: dict[int, float]
+    recommended: tuple[str, ...]
+    normfinder_rho: dict[str, float]
+    best_pair: tuple[str, str] | None
+    best_pair_rho: float | None
+    groups_used: int
+    notes: tuple[str, ...]
+
+
+def stability_candidates(project: Project) -> list[str]:
+    """Targets marked as candidates; by default the references, or every target when there is none."""
+    targets = project.targets
+    references = {n for n, t in targets.items() if t.kind == "reference"}
+    default = references or set(targets)
+    chosen = [n for n, t in targets.items() if t.stability_candidate or (t.stability_candidate is None and n in default)]
+    return sorted(chosen)
+
+
+def _group_of(project: Project, sample: str) -> str:
+    known = project.samples.get(sample)
+    return (known.group or "").strip() if known else ""
+
+
+def analyze_stability(
+    project: Project, mean_cq: dict[tuple[str, str], float | None], eff: dict[str, float]
+) -> tuple[StabilityResult | None, list[Flag]]:
+    """The ranking of the candidates; what cannot be computed stays empty and is named in the notes."""
+    genes = stability_candidates(project)
+    if not genes:
+        return None, []
+    samples = sorted({s for (s, t) in mean_cq if t in genes})
+    x, kept, excluded = log2_quantities(mean_cq, eff, samples, genes)
+    flags = [Flag("info", "stability_samples_excluded", {"count": len(excluded)})] if excluded else []
+    notes: list[str] = []
+    ranking: tuple[str, ...] = tuple(genes)
+    m: dict[str, float] = {}
+    steps: tuple = ()
+    v: dict[int, float] = {}
+    recommended: tuple[str, ...] = ()
+    rho: dict[str, float] = {}
+    pair: tuple[str, str] | None = None
+    pair_rho: float | None = None
+    groups_used = 0
+    if len(genes) < 2:
+        notes.append("few_candidates")
+    elif len(kept) < 3:
+        notes.append("few_samples")
+    else:
+        m = {g: float(value) for g, value in zip(genes, genorm_m(x))}
+        ranking, steps = genorm_ranking(x, genes)
+        v = pairwise_v(x, genes, ranking)
+        recommended, found = recommend(ranking, v)
+        if not found:
+            notes.append("v_never_below")
+        if len(genes) >= 3:
+            nf = normfinder(x, [_group_of(project, s) for s in kept])
+            rho = {g: float(value) for g, value in zip(genes, nf.rho)}
+            pair, pair_rho = normfinder_best_pair(nf, genes)
+            groups_used = nf.groups_used
+            notes += nf.notes
+        else:
+            notes.append("few_candidates_normfinder")
+    result = StabilityResult(
+        ranking, kept, excluded, m, steps, v, recommended, rho, pair, pair_rho, groups_used, tuple(notes)
+    )
+    return result, flags
+
+
+def reference_flags(project: Project, mean_cq: dict[tuple[str, str], float | None], eff: dict[str, float]) -> list[Flag]:
+    """Are the chosen references stable in this experiment? Judged by geNorm M among themselves."""
+    references = sorted(n for n, t in project.targets.items() if t.kind == "reference")
+    if len(references) == 1:
+        return [Flag("info", "single_reference", target=references[0])]
+    if len(references) < 2:
+        return []
+    samples = sorted({s for (s, t) in mean_cq if t in references})
+    x, kept, _ = log2_quantities(mean_cq, eff, samples, references)
+    if len(kept) < 3:
+        return []
+    limit = project.settings.genorm_m_max
+    return [
+        Flag("warning", "reference_unstable", {"m": float(value), "limit": limit}, target=name)
+        for name, value in zip(references, genorm_m(x))
+        if value > limit
+    ]

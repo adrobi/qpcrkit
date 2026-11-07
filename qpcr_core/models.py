@@ -97,6 +97,7 @@ class Target:
     kind: str = "target"  # target | reference
     efficiency_mode: str = "stdcurve"  # stdcurve | manual | ideal
     efficiency_manual: float | None = None
+    stability_candidate: bool | None = None  # None: by default (the references, or every target without them)
 
 
 @dataclass
@@ -124,6 +125,7 @@ class Settings:
     tm_shift_max: float = 1.0  # degrees from the median Tm of a target on a run
     early_cq: float = 10.0  # below this a Cq leaves too few cycles for a baseline
     cq_disagree_max: float = 0.5  # cycles between our Cq and the instrument Cq, beyond their usual shift
+    genorm_m_max: float = 1.0  # Hellemans 2007: 0.5 for homogeneous samples, 1.0 for heterogeneous
 
 
 @dataclass

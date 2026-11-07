@@ -268,3 +268,160 @@ def test_pairs_are_all_considered():
         for a, b in itertools.combinations(range(4), 2)
     )
     assert rho == pytest.approx(best[0]) and pair == best[1]
+
+
+# --- inside the project and the analysis ---
+
+from qpcr_core.editing import EditHistory, rename_target_in_run, set_stability_candidate, set_target  # noqa: E402
+from qpcr_core.pipeline import analyze  # noqa: E402
+from qpcr_core.sessions import load_project, save_project  # noqa: E402
+from tests.factories import make_project  # noqa: E402
+from tests.test_pipeline import demo_project  # noqa: E402
+
+
+def _three_refs(shift_lps=0.0, refs=("R1", "R2", "R3"), samples_per_group=4, drop=None):
+    """Ctrl and LPS, three references and one target; R3 may move with the treatment."""
+    rng = np.random.default_rng(7)
+    rows, groups = [], {}
+    for g_index, group in enumerate(("Ctrl", "LPS")):
+        for i in range(samples_per_group):
+            sample = f"{group}-{i}"
+            groups[sample] = group
+            amount = rng.normal(0, 0.8)  # how much RNA went into this sample
+            levels = {"R1": 20.0, "R2": 22.0, "R3": 24.0, "T": 27.0 - 2.0 * g_index}
+            for gene, level in levels.items():
+                cq = level - amount + rng.normal(0, 0.08)
+                if gene == "R3" and group == "LPS":
+                    cq += shift_lps
+                if drop == (sample, gene):
+                    cq = None
+                for rep in range(2):
+                    rows.append(("R1", f"{sample}-{gene}-{rep}", sample, gene, "unknown", cq, None))
+    return make_project(rows, groups=groups, refs=refs, control_group="Ctrl")
+
+
+def test_candidates_default_to_the_references():
+    p = _three_refs()
+    assert st.stability_candidates(p) == ["R1", "R2", "R3"]
+
+
+def test_without_references_every_target_is_a_candidate():
+    p = _three_refs(refs=())
+    assert st.stability_candidates(p) == ["R1", "R2", "R3", "T"]
+
+
+def test_explicit_choice_wins():
+    p = _three_refs()
+    set_stability_candidate(p, "T", True)
+    set_stability_candidate(p, "R1", False)
+    assert st.stability_candidates(p) == ["R2", "R3", "T"]
+    set_stability_candidate(p, "R1", None)
+    assert st.stability_candidates(p) == ["R1", "R2", "R3", "T"]
+
+
+def test_results_have_the_ranking():
+    res = analyze(_three_refs(shift_lps=3.0))
+    s = res.stability
+    assert s.candidates[-1] == "R3"
+    assert set(s.genorm_m) == {"R1", "R2", "R3"}
+    assert s.pairwise_v and 2 in s.pairwise_v
+    assert set(s.normfinder_rho) == {"R1", "R2", "R3"} and s.groups_used == 2
+    assert s.best_pair is not None
+    assert len(s.samples) == 8 and s.excluded_samples == ()
+
+
+def test_an_unstable_reference_is_flagged():
+    res = analyze(_three_refs(shift_lps=3.0))
+    flags = [f for f in res.flags if f.code == "reference_unstable"]
+    assert [f.target for f in flags] == ["R3"]
+    assert flags[0].params["m"] > 1.0 and flags[0].params["limit"] == 1.0
+    assert flags[0].severity == "warning"
+
+
+def test_stable_references_raise_nothing():
+    res = analyze(_three_refs())
+    assert not [f for f in res.flags if f.code in ("reference_unstable", "single_reference")]
+
+
+def test_the_limit_is_a_setting():
+    p = _three_refs(shift_lps=1.0)
+    m = analyze(p).stability.genorm_m["R3"]
+    p.settings.genorm_m_max = m + 0.1
+    assert not [f for f in analyze(p).flags if f.code == "reference_unstable"]
+    p.settings.genorm_m_max = m - 0.1
+    assert [f for f in analyze(p).flags if f.code == "reference_unstable"]
+
+
+def test_one_reference_gets_the_miqe_note():
+    res = analyze(demo_project())
+    flag = next(f for f in res.flags if f.code == "single_reference")
+    assert flag.severity == "info"
+    assert res.stability.genorm_m == {} and "few_candidates" in res.stability.notes
+
+
+def test_samples_without_a_cq_are_counted():
+    res = analyze(_three_refs(drop=("LPS-1", "R2")))
+    flag = next(f for f in res.flags if f.code == "stability_samples_excluded")
+    assert flag.params["count"] == 1 and res.stability.excluded_samples == ("LPS-1",)
+
+
+def test_two_candidates_give_genorm_only():
+    p = _three_refs(refs=("R1", "R2"))
+    s = analyze(p).stability
+    assert set(s.genorm_m) == {"R1", "R2"} and s.pairwise_v == {}
+    assert s.normfinder_rho == {} and s.best_pair is None
+    assert s.recommended == ("R1", "R2")
+
+
+def test_two_references_and_two_samples_do_not_fail():
+    p = _three_refs(refs=("R1", "R2"), samples_per_group=1)
+    res = analyze(p)
+    assert not [f for f in res.flags if f.code == "reference_unstable"]
+    assert "few_samples" in res.stability.notes
+
+
+def test_rq_does_not_change():
+    before = {(r.sample, r.target): r.rq for r in analyze(_three_refs(shift_lps=3.0)).rqs}
+    p = _three_refs(shift_lps=3.0)
+    set_stability_candidate(p, "T", True)
+    assert {(r.sample, r.target): r.rq for r in analyze(p).rqs} == before
+
+
+def test_candidate_choice_is_saved(tmp_path):
+    p = _three_refs()
+    set_stability_candidate(p, "T", True)
+    path = tmp_path / "p.qpcrkit.json"
+    save_project(p, path)
+    q = load_project(path)
+    assert q.targets["T"].stability_candidate is True and q.targets["R1"].stability_candidate is None
+
+
+def test_rename_carries_the_choice():
+    p = _three_refs()
+    set_stability_candidate(p, "R3", False)
+    rename_target_in_run(p, "R1", "R3", "HPRT1")
+    assert p.targets["HPRT1"].stability_candidate is False and "R3" not in p.targets
+
+
+def test_rename_into_an_existing_target_keeps_its_choice():
+    p = _three_refs()
+    set_stability_candidate(p, "R2", True)
+    set_stability_candidate(p, "R3", False)
+    rename_target_in_run(p, "R1", "R3", "R2")
+    assert p.targets["R2"].stability_candidate is True
+
+
+def test_a_target_gone_from_every_well_takes_its_choice_along():
+    p = _three_refs()
+    set_stability_candidate(p, "T", True)
+    coords = [w.coord for w in p.runs[0].wells.values() if w.reactions[0].target == "T"]
+    set_target(p, "R1", coords, "IL6")
+    assert "T" not in p.targets and p.targets["IL6"].stability_candidate is None
+
+
+def test_choice_can_be_undone():
+    p = _three_refs()
+    history = EditHistory()
+    history.record(p)
+    set_stability_candidate(p, "T", True)
+    assert history.undo(p).targets["T"].stability_candidate is None

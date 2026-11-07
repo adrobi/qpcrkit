@@ -105,7 +105,14 @@ def rename_target_in_run(project: Project, run_id: str, old: str, new: str) -> N
             into.kind = "reference"
         if into.efficiency_mode == "stdcurve" and into.efficiency_manual is None:  # nothing set on it yet
             into.efficiency_mode, into.efficiency_manual = source.efficiency_mode, source.efficiency_manual
+        if into.stability_candidate is None:
+            into.stability_candidate = source.stability_candidate
     project.prune_orphans()
+
+
+def set_stability_candidate(project: Project, target: str, value: bool | None) -> None:
+    """Whether a target takes part in the ranking of references; None goes back to the default."""
+    project.targets.setdefault(target, Target(target)).stability_candidate = value
 
 
 def set_threshold(project: Project, run_id: str, target: str, value: float | None) -> None:
