@@ -147,3 +147,124 @@ def test_no_pairwise_variation_with_two_genes():
 def test_recommend(v, expected, found):
     ranking = ("A", "B", "C", "D")[: 2 if not v else 4]
     assert st.recommend(ranking, v) == (expected, found)
+
+
+# --- NormFinder ---
+
+
+def _groups(n1=4, n2=4):
+    return ["G1"] * n1 + ["G2"] * n2
+
+
+def _nf_data(seed=3, n1=4, n2=4, shift=None, spread=(0.1, 0.15, 0.2, 0.25)):
+    rng = np.random.default_rng(seed)
+    n = n1 + n2
+    base = rng.normal(0, 1, n)[:, None]
+    x = base + np.column_stack([rng.normal(0, s, n) for s in spread])
+    if shift is not None:
+        gene, amount = shift
+        x[n1:, gene] += amount
+    return x
+
+
+def test_differences_sum_to_zero_over_groups_with_unequal_sizes():
+    x = _nf_data(n1=3, n2=5)
+    r = st.normfinder(x, _groups(3, 5))
+    assert r.groups_used == 2
+    assert r.d.shape == (2, 4)
+    # before shrinkage d sums to zero per gene; shrinkage multiplies each by a positive factor of one sign
+    assert np.all(np.sign(r.d[0]) == -np.sign(r.d[1])) or np.allclose(r.d, 0)
+
+
+def test_a_gene_shifted_in_one_group_ranks_last():
+    x = _nf_data(shift=(0, 1.0))
+    r = st.normfinder(x, _groups())
+    assert int(np.argmax(r.rho)) == 0
+    m = st.genorm_m(x)
+    rank_rho = int(np.argsort(np.argsort(r.rho))[0])
+    rank_m = int(np.argsort(np.argsort(m))[0])
+    assert rank_rho == 3 and rank_rho >= rank_m
+
+
+def test_without_groups_rho_is_the_corrected_sd():
+    x = _nf_data()
+    r = st.normfinder(x, [""] * x.shape[0])
+    k = x.shape[1]
+    resid = x - x.mean(axis=0) - x.mean(axis=1, keepdims=True) + x.mean()
+    a = (resid**2).sum(axis=0) / (x.shape[0] - 1)
+    sigma2 = np.maximum((a - a.sum() / (k * (k - 1))) / (1 - 2 / k), 0)
+    assert r.groups_used == 0 and "no_groups" in r.notes
+    assert r.rho == pytest.approx(np.sqrt(sigma2))
+    assert r.v[0] == pytest.approx(sigma2)
+
+
+def test_less_material_in_one_group_changes_nothing():
+    x = _nf_data()
+    y = x.copy()
+    y[4:, :] -= 2.0  # every gene lower in G2: just less RNA
+    assert st.normfinder(y, _groups()).rho == pytest.approx(st.normfinder(x, _groups()).rho)
+
+
+def test_genes_in_perfect_agreement():
+    base = np.array([0.0, 1.0, -0.5, 2.0, 0.3, 1.1])
+    x = np.column_stack([base, base + 1, base + 2])
+    for groups in (["G1"] * 3 + ["G2"] * 3, [""] * 6):
+        r = st.normfinder(x, groups)
+        assert r.rho == pytest.approx([0, 0, 0]) and np.isfinite(r.rho).all()
+
+
+def test_a_group_of_one_sample_is_left_out():
+    x = _nf_data(n1=4, n2=4)
+    x = np.vstack([x, x[:1] + 0.1])
+    groups = _groups() + ["G3"]
+    r = st.normfinder(x, groups)
+    assert r.groups_used == 2 and "small_groups" in r.notes
+
+
+def test_samples_without_a_group_among_grouped_ones():
+    x = _nf_data()
+    groups = _groups()
+    groups[0] = ""
+    r = st.normfinder(x, groups)
+    assert r.groups_used == 2 and "ungrouped_samples" in r.notes
+
+
+def test_all_groups_of_one_sample_fall_back_to_no_groups():
+    x = _nf_data(n1=4, n2=0)
+    r = st.normfinder(x, ["a", "b", "c", "d"])
+    assert r.groups_used == 0 and "no_groups" in r.notes and np.isfinite(r.rho).all()
+
+
+def test_too_few_genes():
+    with pytest.raises(ValueError):
+        st.normfinder(_nf_data()[:, :2], _groups())
+
+
+def test_best_pair_compensates():
+    """Two genes shifted in opposite directions are worse alone but good together."""
+    x = _nf_data(spread=(0.05, 0.05, 0.3, 0.3))
+    x[4:, 0] += 0.6
+    x[4:, 1] -= 0.6
+    r = st.normfinder(x, _groups())
+    pair, rho = st.normfinder_best_pair(r, GENES)
+    assert set(pair) == {"A", "B"}
+    assert rho < min(r.rho[0], r.rho[1])
+
+
+def test_best_pair_without_groups():
+    x = _nf_data(spread=(0.05, 0.08, 0.3, 0.4))
+    r = st.normfinder(x, [""] * 8)
+    pair, rho = st.normfinder_best_pair(r, GENES)
+    assert set(pair) == {"A", "B"}
+    assert rho == pytest.approx(math.sqrt((r.v[0][0] + r.v[0][1]) / 4))
+
+
+def test_pairs_are_all_considered():
+    x = _nf_data()
+    r = st.normfinder(x, _groups())
+    pair, rho = st.normfinder_best_pair(r, GENES)
+    best = min(
+        (np.mean(np.abs((r.d[:, a] + r.d[:, b]) / 2) + np.sqrt((r.v[:, a] + r.v[:, b]) / 4)), (GENES[a], GENES[b]))
+        for a, b in itertools.combinations(range(4), 2)
+    )
+    assert rho == pytest.approx(best[0]) and pair == best[1]
