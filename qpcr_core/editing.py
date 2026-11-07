@@ -115,6 +115,12 @@ def set_stability_candidate(project: Project, target: str, value: bool | None) -
     project.targets.setdefault(target, Target(target)).stability_candidate = value
 
 
+def set_references(project: Project, references: list[str], among: list[str]) -> None:
+    """The given genes become references, the rest of ``among`` become targets; others are not touched."""
+    for name in among:
+        project.targets.setdefault(name, Target(name)).kind = "reference" if name in references else "target"
+
+
 def set_threshold(project: Project, run_id: str, target: str, value: float | None) -> None:
     """A manual threshold for a target on a run; None goes back to the automatic one."""
     run = project.run(run_id)

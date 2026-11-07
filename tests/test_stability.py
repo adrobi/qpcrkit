@@ -279,7 +279,7 @@ from tests.factories import make_project  # noqa: E402
 from tests.test_pipeline import demo_project  # noqa: E402
 
 
-def _three_refs(shift_lps=0.0, refs=("R1", "R2", "R3"), samples_per_group=4, drop=None):
+def _three_refs(shift_lps=0.0, refs=("R1", "R2", "R3"), samples_per_group=4, drop=None, fourth=False):
     """Ctrl and LPS, three references and one target; R3 may move with the treatment."""
     rng = np.random.default_rng(7)
     rows, groups = [], {}
@@ -289,6 +289,8 @@ def _three_refs(shift_lps=0.0, refs=("R1", "R2", "R3"), samples_per_group=4, dro
             groups[sample] = group
             amount = rng.normal(0, 0.8)  # how much RNA went into this sample
             levels = {"R1": 20.0, "R2": 22.0, "R3": 24.0, "T": 27.0 - 2.0 * g_index}
+            if fourth:
+                levels["R4"] = 23.0  # one more stable gene, so that V can fall below 0.15
             for gene, level in levels.items():
                 cq = level - amount + rng.normal(0, 0.08)
                 if gene == "R3" and group == "LPS":

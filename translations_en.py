@@ -53,6 +53,22 @@ EN: dict[str, str] = {
 
 EN.update(
     {
+        "tab.stab": "Stability",
+        "stab.title": "Stability of reference genes",
+        "stab.candidates": "Reference candidates",
+        "stab.candidate": "{name} ({n} samples)",
+        "stab.apply": "Make them the references",
+        "stab.rank": "Rank",
+        "stab.advice": "{n} references are recommended: {genes} (V = {v:.2f})",
+        "stab.advice_two": "With two candidates, take both: {genes}",
+        "stab.advice_all": "V does not fall below 0.15: take all {n} candidates: {genes}",
+        "stab.best_pair": "Best NormFinder pair: {a} and {b} (ρ = {rho:.3f})",
+        "ui.set.genorm_m_max": "geNorm M of references, max",
+        "ui.set.genorm_m_max_tip": "Hellemans et al. 2007: 0.5 for homogeneous samples (cell lines), 1.0 for heterogeneous ones (tissues)",
+    }
+)
+EN.update(
+    {
         "sheet.stability": "Stability",
         "stab.note.few_candidates": "At least two candidates are needed",
         "stab.note.few_candidates_normfinder": "NormFinder needs at least three candidates",

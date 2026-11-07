@@ -136,6 +136,22 @@ def current_language() -> str:
 
 RU.update(
     {
+        "tab.stab": "Стабильность",
+        "stab.title": "Стабильность референсных генов",
+        "stab.candidates": "Кандидаты в референсы",
+        "stab.candidate": "{name} ({n} образцов)",
+        "stab.apply": "Сделать референсами",
+        "stab.rank": "Место",
+        "stab.advice": "Рекомендуется {n} референса: {genes} (V = {v:.2f})",
+        "stab.advice_two": "Из двух кандидатов берите оба: {genes}",
+        "stab.advice_all": "V не опускается ниже 0,15: возьмите всех {n} кандидатов: {genes}",
+        "stab.best_pair": "Лучшая пара NormFinder: {a} и {b} (ρ = {rho:.3f})",
+        "ui.set.genorm_m_max": "geNorm M референсов, макс.",
+        "ui.set.genorm_m_max_tip": "Hellemans et al. 2007: 0,5 для однородных образцов (клеточные линии), 1,0 для разнородных (ткани)",
+    }
+)
+RU.update(
+    {
         "sheet.stability": "Стабильность",
         "stab.note.few_candidates": "Нужно минимум два кандидата",
         "stab.note.few_candidates_normfinder": "NormFinder нужно минимум три кандидата",

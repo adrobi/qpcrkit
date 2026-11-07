@@ -69,6 +69,7 @@ from ui.data_table import DataTable
 from ui.editor import ProjectEditor
 from ui.plate_view import PlateView
 from ui.selection_panel import SelectionPanel
+from ui.stability_tab import StabilityTab
 from ui.start_page import StartPage
 from ui.result_tabs import ExpressionTab, QcTab, StdCurveTab
 from ui.shell import PAGES, HintBar, NavRail, TopBar
@@ -156,6 +157,7 @@ class MainWindow(QMainWindow):
         self.data = DataTable(self.editor)
         self.std = StdCurveTab()
         self.std.point_clicked.connect(self._exclude_std_point)
+        self.stab = StabilityTab(self.editor)
         self.expr = ExpressionTab(self.editor)
         self.expr.save_requested.connect(self._save_expression_figure)
         self.qc = QcTab()
@@ -170,6 +172,7 @@ class MainWindow(QMainWindow):
             "plate": self._plate_page(),
             "data": self.data,
             "std": self.std,
+            "stab": self.stab,
             "expr": self.expr,
             "qc": self.qc,
         }
@@ -331,7 +334,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(tr("ui.analysis_failed", error=exc))
             return
         self.results = results
-        for tab in (self.std, self.expr, self.qc):
+        for tab in (self.std, self.stab, self.expr, self.qc):
             tab.set_results(project, results, self.dark)
         self.curves.set_data(project, results, self.current_run_id)
         self.analysis.panel.set_results(results)
@@ -735,7 +738,7 @@ class MainWindow(QMainWindow):
         self.nav.set_theme(dark)
         self.top_bar.set_theme(dark)
         if self.results is not None:
-            for tab in (self.std, self.expr, self.qc):
+            for tab in (self.std, self.stab, self.expr, self.qc):
                 tab.set_results(self.editor.project, self.results, dark)
 
     def set_language(self, lang: str) -> None:

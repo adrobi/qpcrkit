@@ -29,6 +29,7 @@ PAGES = (
     ("plate", "grid-3x3"),
     ("data", "table-2"),
     ("std", "chart-scatter"),
+    ("stab", "scale"),
     ("expr", "chart-column"),
     ("qc", "shield-check"),
 )

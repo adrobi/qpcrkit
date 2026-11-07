@@ -49,7 +49,7 @@ def test_qc_counter(qapp):
 
 
 def test_window_pages(demo):
-    assert PAGE_NAMES == ("plate", "data", "std", "expr", "qc")
+    assert PAGE_NAMES == ("plate", "data", "std", "stab", "expr", "qc")
     for name in PAGE_NAMES:
         demo.go_to(name)
         assert demo.current_page() == name

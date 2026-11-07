@@ -147,6 +147,7 @@ class SettingsPanel(QWidget):
             ("tm_shift_max", 0.0, 10.0, 0.1, 1),
             ("early_cq", 0.0, 30.0, 0.5, 1),
             ("cq_disagree_max", 0.0, 10.0, 0.1, 1),
+            ("genorm_m_max", 0.1, 5.0, 0.1, 2),
         )
         for name, minimum, maximum, step, decimals in specs:
             spin = QDoubleSpinBox()
@@ -155,6 +156,8 @@ class SettingsPanel(QWidget):
             spin.setDecimals(decimals)
             self.spins[name] = spin
             self._form.addRow(QLabel(tr(f"ui.set.{name}")), spin)
+
+        self.spins["genorm_m_max"].setToolTip(tr("ui.set.genorm_m_max_tip"))
 
         self.pool_check = QCheckBox(tr("ui.pool_std_runs"))
         self._form.addRow(self.pool_check)
