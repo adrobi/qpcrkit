@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] — 2026-11-07
+
+### Added
+- Stability of reference genes: geNorm M with stepwise exclusion and pairwise variation V, NormFinder ρ with sample groups and the best pair of genes. Checked against NormqPCR and ctrlGene on their published data sets.
+- A Stability page: candidate genes with check boxes, the advice on how many references to take and which, a button that makes them the references; geNorm and NormFinder figures.
+- QC: a warning when a chosen reference is not stable in the experiment (geNorm M above a limit set in the analysis settings), a note for a single reference, a note for samples left out of the ranking.
+- A Stability sheet in the workbook, a section in the HTML report, the stability figures in exported figures and `qpcrkit analyze --figures`.
+- A warning when a well has two reactions with the same target and dye; only the first is used.
+
+### Changed
+- When the analysis fails, the result pages say so instead of showing the previous results.
+
+### Fixed
+- A target name starting with "_" no longer disappears from the legend of curve figures.
+- The curve graph keeps its saved picture when its size does not change.
+
 ## [1.1.0] — 2026-11-07
 
 ### Added

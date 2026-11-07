@@ -78,6 +78,10 @@ class StabilityTab(QWidget):
         figures = QSplitter(Qt.Orientation.Horizontal)
         figures.addWidget(self.genorm_canvas)
         figures.addWidget(normfinder)
+        self.normfinder_box = normfinder
+        figures.setStretchFactor(0, 3)  # geNorm draws two plots side by side
+        figures.setStretchFactor(1, 2)
+        figures.setSizes([3000, 2000])
         right = QWidget()
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(0, 0, 0, 0)
@@ -116,7 +120,9 @@ class StabilityTab(QWidget):
         self.genorm_canvas.setVisible(computed)
         self.normfinder_canvas.setVisible(computed and bool(s.normfinder_rho))
         self.normfinder_table.setVisible(computed and bool(s.normfinder_rho))
-        other_notes = [tr(f"stab.note.{n}") for n in (s.notes if s else ()) if not n.startswith("few_candidates") and n != "few_samples"]
+        self.normfinder_box.setVisible(computed and bool(s.normfinder_rho))
+        shown_elsewhere = ("few_candidates", "few_samples", "v_never_below")  # in need_more or in the summary
+        other_notes = [tr(f"stab.note.{n}") for n in (s.notes if s else ()) if n not in shown_elsewhere]
         self.notes.setText("\n".join(other_notes))
         self.notes.setVisible(bool(other_notes))
         style = mpl_style(dark)
@@ -152,15 +158,19 @@ class StabilityTab(QWidget):
         _table(self.normfinder_table, [], [])
         self.normfinder_table.hide()
         self.best_pair.setText("")
+        self._clear_checks()
         self.failure.setText(text)
         self.failure.show()
 
-    def _fill_checks(self, project: Project, results: Results) -> None:
+    def _clear_checks(self) -> None:
         while self._check_layout.count() > 1:
             widget = self._check_layout.takeAt(0).widget()
             if widget is not None:
                 widget.deleteLater()
         self.candidate_checks = {}
+
+    def _fill_checks(self, project: Project, results: Results) -> None:
+        self._clear_checks()
         for name in sorted(project.targets):
             count = sum(1 for (_s, t), cq in results.mean_cq.items() if t == name and cq is not None)
             check = QCheckBox(tr("stab.candidate", name=name, n=count))

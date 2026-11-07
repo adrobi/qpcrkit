@@ -57,6 +57,11 @@ def _well_key(coord: str) -> int:
     return 1000 + row * 100 + col
 
 
+def _index_of(well, reaction) -> int:
+    """The row is one reaction; a twin with the same target must not change along with it."""
+    return next(i for i, r in enumerate(well.reactions) if r is reaction)
+
+
 class _FilterProxy(QSortFilterProxyModel):
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -254,6 +259,7 @@ class ReactionModel(QAbstractTableModel):
                 reaction.target,
                 checked,
                 "manual",
+                index=_index_of(well, reaction),
             )
             return True
 
@@ -283,6 +289,7 @@ class ReactionModel(QAbstractTableModel):
             [well.coord],
             "" if value is None else str(value),
             target=reaction.target,
+            index=_index_of(well, reaction),
         )
         return True
 
@@ -302,6 +309,7 @@ class ReactionModel(QAbstractTableModel):
             [well.coord],
             quantity,
             target=reaction.target,
+            index=_index_of(well, reaction),
         )
         return True
 

@@ -103,16 +103,16 @@ def normfinder(log2q: np.ndarray, groups: list[str]) -> NormFinderResult:
     n, k = log2q.shape
     if k < 3:
         raise ValueError("NormFinder needs at least 3 genes")
-    notes: list[str] = []
-    if any(not g for g in groups) and any(groups):
-        notes.append("ungrouped_samples")
     sizes = {g: groups.count(g) for g in dict.fromkeys(groups) if g}
+    usable = [g for g, size in sizes.items() if size >= 2]
+    if len(usable) < 2:  # every sample is used, so nothing is "left out"
+        sigma2 = _intragroup_variance(log2q)
+        return NormFinderResult(np.sqrt(sigma2), np.zeros((1, k)), sigma2[None, :], 0, ("no_groups",))
+    notes: list[str] = []
+    if any(not g for g in groups):
+        notes.append("ungrouped_samples")
     if any(size < 2 for size in sizes.values()):
         notes.append("small_groups")
-    usable = [g for g, size in sizes.items() if size >= 2]
-    if len(usable) < 2:
-        sigma2 = _intragroup_variance(log2q)
-        return NormFinderResult(np.sqrt(sigma2), np.zeros((1, k)), sigma2[None, :], 0, tuple(notes) + ("no_groups",))
 
     blocks = [log2q[[i for i, g in enumerate(groups) if g == name]] for name in usable]
     sizes_used = np.array([len(b) for b in blocks], dtype=float)
@@ -187,7 +187,7 @@ def analyze_stability(
         return None, []
     samples = sorted({s for (s, t) in mean_cq if t in genes})
     x, kept, excluded = log2_quantities(mean_cq, eff, samples, genes)
-    flags = [Flag("info", "stability_samples_excluded", {"count": len(excluded)})] if excluded else []
+    flags = [Flag("info", "stability_samples_excluded", {"count": len(excluded)})] if excluded and len(genes) >= 2 else []
     notes: list[str] = []
     ranking: tuple[str, ...] = tuple(genes)
     m: dict[str, float] = {}

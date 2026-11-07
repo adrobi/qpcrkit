@@ -36,6 +36,9 @@ handles Sanger reads.
   per-target efficiency — from the curve, entered manually or 100 % (classic ΔΔCt).
 - Statistics on the log2 scale: SD / SEM / 95 % CI, Welch t-test, one-way ANOVA
   with Dunnett or Tukey, Benjamini–Hochberg across targets.
+- Choice of reference genes: geNorm M with stepwise exclusion and pairwise variation V,
+  NormFinder ρ with sample groups and its best pair; advice on how many references to take
+  and a one-click switch. QC warns when the chosen references are not stable in an experiment.
 
 **Curves**
 - Baseline, Cq at a common threshold, per-well efficiency in a window of linearity
@@ -106,6 +109,24 @@ qpcrkit analyze demo.qpcrkit.json -o results.xlsx --html report.html --figures f
 - RQ = (1+E<sub>target</sub>)<sup>ΔCq</sup> / geomean over references of
   (1+E<sub>ref</sub>)<sup>ΔCq</sup>, ΔCq = Cq(control) − Cq(sample) (Pfaffl 2001).
 - Group statistics and tests use log2(RQ) of biological replicates.
+
+### Choosing reference genes
+
+The **Stability** page ranks the candidate genes (by default the references, or every target when
+none is chosen yet) with two methods:
+
+- **geNorm** (Vandesompele et al. 2002): M is the mean variation of a gene relative to the other
+  candidates; the least stable gene is excluded step by step, and the pairwise variation V(n/n+1)
+  tells how many references are enough (below 0.15).
+- **NormFinder** (Andersen et al. 2004): separates the spread within groups from the shift between them,
+  so a gene that moves with the treatment ranks low even when it agrees with the others inside a group.
+
+In every experiment QC checks the chosen references: geNorm M above 1.0 (0.5 for homogeneous samples,
+Hellemans et al. 2007; set in the analysis settings) gives a warning, and a single reference a note that
+MIQE recommends at least two. The numbers match the reference implementations (NormqPCR, ctrlGene) on
+their published data sets to 7 decimal places.
+
+![stability of reference genes](docs/screenshots/en/stability.png)
 
 ### How the curve results compare with instruments
 

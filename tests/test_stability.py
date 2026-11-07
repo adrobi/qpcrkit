@@ -537,3 +537,44 @@ def test_two_candidates_save_genorm_only(tmp_path):
     out = tmp_path / "figs"
     assert main(["analyze", str(project), "--figures", str(out)]) == 0
     assert (out / "stability_genorm.svg").exists() and not (out / "stability_normfinder.svg").exists()
+
+
+# --- the final review of 1.2 ---
+
+
+def test_without_usable_groups_only_no_groups_is_noted():
+    x = _nf_data()
+    groups = ["Ctrl", "Ctrl", "Ctrl", "", "", "", "", "a"]
+    r = st.normfinder(x, groups)
+    assert r.notes == ("no_groups",)  # everything was used, so nothing was "left out"
+
+
+def test_no_exclusion_note_when_nothing_is_ranked():
+    p = demo_project()
+    first = next(s for (s, t), cq in analyze(p).mean_cq.items() if t == "GAPDH" and cq is not None)
+    for run in p.runs:
+        for w in run.wells.values():
+            if w.sample == first:
+                for r in w.reactions:
+                    if r.target == "GAPDH":
+                        r.cq = None
+    assert not [f for f in analyze(p).flags if f.code == "stability_samples_excluded"]
+
+
+def test_a_table_edit_changes_only_its_own_reaction():
+    from PySide6.QtCore import Qt
+
+    from qpcr_core.models import Project, Reaction, Run, Well
+    from ui.data_table import COLUMNS, ReactionModel
+    from ui.editor import ProjectEditor
+
+    well = Well("A1", "s", [Reaction(target="T", fluor="FAM", cq=20.0), Reaction(target="T", fluor="FAM", cq=30.0)])
+    p = Project(runs=[Run(id="R1", name="R1", wells={"A1": well})])
+    p.ensure_targets_and_samples()
+    m = ReactionModel(ProjectEditor(p))
+    m.setData(m.index(1, COLUMNS.index("excluded")), Qt.CheckState.Checked.value, Qt.ItemDataRole.CheckStateRole)
+    m.setData(m.index(1, COLUMNS.index("role")), "ntc", Qt.ItemDataRole.EditRole)
+    m.setData(m.index(1, COLUMNS.index("quantity")), "100", Qt.ItemDataRole.EditRole)
+    first, second = well.reactions
+    assert (first.excluded, first.role, first.quantity) == (False, "unknown", None)
+    assert (second.excluded, second.role, second.quantity) == (True, "ntc", 100.0)

@@ -133,3 +133,36 @@ def test_m_limit_in_the_settings(win):
     spin.setValue(round(max(m - 0.2, 0.1), 2))
     win.recalculate_now()
     assert [f for f in win.results.flags if f.code == "reference_unstable"]
+
+
+# --- the final review of 1.2 ---
+
+
+def test_the_button_keeps_the_other_candidates(qapp):
+    p = _four()
+    editor, tab = _tab(p)
+    tab.apply_button.click()
+    from qpcr_core.stability import stability_candidates
+
+    assert stability_candidates(editor.project) == ["R1", "R2", "R3", "R4"]
+    assert all(tab.candidate_checks[g].isChecked() for g in ("R1", "R2", "R3", "R4"))
+    assert tab.normfinder_table.rowCount() == 4
+
+
+def test_two_candidates_say_why_normfinder_is_missing(qapp):
+    _, tab = _tab(_three_refs(refs=("R1", "R2")))
+    assert tr("stab.note.few_candidates_normfinder") in tab.notes.text()
+    assert tab.normfinder_box.isHidden()
+
+
+def test_advice_to_take_all_is_not_repeated(qapp):
+    p = _three_refs(shift_lps=3.0)  # three candidates: V(2/3) stays high
+    _, tab = _tab(p)
+    assert "v_never_below" in analyze(p).stability.notes
+    assert tr("stab.note.v_never_below") not in tab.notes.text()
+
+
+def test_failure_clears_the_candidates(qapp):
+    _, tab = _tab(_three_refs())
+    tab.show_failure("failed")
+    assert tab.candidate_checks == {}

@@ -7,8 +7,13 @@ import dataclasses
 from .models import PLATE_FORMATS, Project, Reaction, Sample, Target, format_coord
 
 
-def _reactions(project: Project, run_id: str, coords: list[str], target: str | None) -> list[Reaction]:
+def _reactions(
+    project: Project, run_id: str, coords: list[str], target: str | None, index: int | None = None
+) -> list[Reaction]:
+    """``index`` picks one reaction of a well: two may share a target when the layout is wrong."""
     wells = project.run(run_id).wells
+    if index is not None:
+        return [wells[c].reactions[index] for c in coords]
     return [r for c in coords for r in wells[c].reactions if target is None or r.target == target]
 
 
@@ -21,15 +26,22 @@ def assign_sample(project: Project, run_id: str, coords: list[str], sample: str 
     project.prune_orphans()
 
 
-def set_role(project: Project, run_id: str, coords: list[str], role: str, target: str | None = None) -> None:
-    for r in _reactions(project, run_id, coords, target):
+def set_role(
+    project: Project, run_id: str, coords: list[str], role: str, target: str | None = None, index: int | None = None
+) -> None:
+    for r in _reactions(project, run_id, coords, target, index):
         r.role = role
 
 
 def set_quantity(
-    project: Project, run_id: str, coords: list[str], quantity: float | None, target: str | None = None
+    project: Project,
+    run_id: str,
+    coords: list[str],
+    quantity: float | None,
+    target: str | None = None,
+    index: int | None = None,
 ) -> None:
-    for r in _reactions(project, run_id, coords, target):
+    for r in _reactions(project, run_id, coords, target, index):
         r.quantity = quantity
 
 
@@ -37,8 +49,10 @@ def set_group(project: Project, sample: str, group: str) -> None:
     project.samples.setdefault(sample, Sample(sample)).group = group.strip()
 
 
-def set_excluded(project: Project, run_id: str, coord: str, target: str | None, excluded: bool, reason: str = "") -> None:
-    for r in _reactions(project, run_id, [coord], target):
+def set_excluded(
+    project: Project, run_id: str, coord: str, target: str | None, excluded: bool, reason: str = "", index: int | None = None
+) -> None:
+    for r in _reactions(project, run_id, [coord], target, index):
         r.excluded = excluded
         r.exclude_reason = reason if excluded else ""
 
@@ -118,7 +132,9 @@ def set_stability_candidate(project: Project, target: str, value: bool | None) -
 def set_references(project: Project, references: list[str], among: list[str]) -> None:
     """The given genes become references, the rest of ``among`` become targets; others are not touched."""
     for name in among:
-        project.targets.setdefault(name, Target(name)).kind = "reference" if name in references else "target"
+        target = project.targets.setdefault(name, Target(name))
+        target.kind = "reference" if name in references else "target"
+        target.stability_candidate = True  # the evaluated genes stay candidates, the default would now drop them
 
 
 def set_threshold(project: Project, run_id: str, target: str, value: float | None) -> None:
