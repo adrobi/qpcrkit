@@ -53,14 +53,12 @@ def test_plate_actions_assign_group(demo):
 
 
 def test_analysis_error_keeps_window(demo, monkeypatch):
-    old = demo.results
-
     def boom(project):
         raise RuntimeError("kaboom")
 
     monkeypatch.setattr("ui.main_window.analyze", boom)
     demo.recalculate_now()
-    assert demo.results is old
+    assert demo.results is None  # since 1.2 old results are not shown as if they were current
     assert "kaboom" in demo.statusBar().currentMessage()
 
 

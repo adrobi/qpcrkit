@@ -51,6 +51,7 @@ EN: dict[str, str] = {
     "sheet.params": "Analysis parameters",
 }
 
+EN.update({"qc.duplicate_reaction": "A well has two reactions with the same target and dye: only the first is used, check the layout"})
 EN.update(
     {
         "tab.stab": "Stability",

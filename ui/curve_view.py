@@ -99,7 +99,8 @@ class CurveView(QWidget):
     def _fit_margins(self, *_args) -> None:
         """Margins in pixels: as fractions they cut the axis labels on a narrow graph."""
         width, height = self.figure.bbox.width, self.figure.bbox.height
-        if width > 120 and height > 120:
+        if width > 120 and height > 120 and (width, height) != getattr(self, "_fitted_size", None):
+            self._fitted_size = (width, height)  # the same size again keeps the saved picture
             self.figure.subplots_adjust(left=66 / width, right=1 - 12 / width, bottom=44 / height, top=1 - 10 / height)
             self._background = None
             self._segments_px = None

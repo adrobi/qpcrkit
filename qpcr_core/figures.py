@@ -62,7 +62,7 @@ def _curve_axes(fig: Figure, by_target: dict[str, list[Curve]], log: bool = Fals
     if len(by_target) > 1:
         ax.legend(
             [Line2D([], [], color=colors[t]) for t in sorted(by_target)],
-            sorted(by_target),
+            [("\u200b" + t) if t.startswith("_") else t for t in sorted(by_target)],  # matplotlib hides labels with a leading _
             fontsize="small",
             frameon=False,
         )

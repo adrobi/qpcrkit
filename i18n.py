@@ -134,6 +134,7 @@ def tr(key: str, **kwargs) -> str:
 def current_language() -> str:
     return _lang
 
+RU.update({"qc.duplicate_reaction": "В лунке две реакции с одной мишенью и одним красителем: учтена только первая, проверьте разметку"})
 RU.update(
     {
         "tab.stab": "Стабильность",

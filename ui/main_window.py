@@ -331,7 +331,15 @@ class MainWindow(QMainWindow):
         try:
             results = analyze(project)
         except Exception as exc:  # a bug or odd data must not take the window down
-            self.statusBar().showMessage(tr("ui.analysis_failed", error=exc))
+            message = tr("ui.analysis_failed", error=exc)
+            self.statusBar().showMessage(message)
+            self.results = None  # the pages must not keep showing a picture of the previous state
+            for tab in (self.std, self.stab, self.expr, self.qc):
+                tab.show_failure(message)
+            self.curves.set_data(project, None, self.current_run_id)
+            self.analysis.panel.set_results(None)
+            self.data.model.set_results(None)
+            self.nav.set_qc_count(0, 0)
             return
         self.results = results
         for tab in (self.std, self.stab, self.expr, self.qc):

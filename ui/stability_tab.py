@@ -83,6 +83,11 @@ class StabilityTab(QWidget):
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.addLayout(head)
         right_layout.addWidget(self.need_more)
+        self.failure = QLabel()
+        self.failure.setObjectName("dim")
+        self.failure.setWordWrap(True)
+        self.failure.hide()
+        right_layout.insertWidget(0, self.failure)
         right_layout.addWidget(self.notes)
         right_layout.addWidget(figures, 1)
         self._figures = figures
@@ -98,6 +103,7 @@ class StabilityTab(QWidget):
     # --- results ---
 
     def set_results(self, project: Project, results: Results, dark: bool) -> None:
+        self.failure.hide()
         self._candidates = stability_candidates(project)
         self._fill_checks(project, results)
         s = results.stability
@@ -133,6 +139,21 @@ class StabilityTab(QWidget):
             _table(self.normfinder_table, [tr("ui.target"), "ρ", tr("stab.rank")], [])
             self.best_pair.setText("")
         self._update_button(project)
+
+    def show_failure(self, text: str) -> None:
+        self._recommended = ()
+        self.apply_button.setEnabled(False)
+        self.summary.setText("")
+        self.need_more.hide()
+        self.notes.hide()
+        for canvas in (self.genorm_canvas, self.normfinder_canvas):
+            canvas.set_figure(None)
+            canvas.hide()
+        _table(self.normfinder_table, [], [])
+        self.normfinder_table.hide()
+        self.best_pair.setText("")
+        self.failure.setText(text)
+        self.failure.show()
 
     def _fill_checks(self, project: Project, results: Results) -> None:
         while self._check_layout.count() > 1:

@@ -16,6 +16,7 @@ from .curves import (
     source_flags,
     target_efficiencies,
 )
+from .editing import clone_project
 from .flags import Flag
 from .models import Project, Reaction, Run, Well
 from .qc import check_reactions
@@ -55,8 +56,43 @@ class Results:
         return [f for f in self.flags if f.severity == severity]
 
 
+def _duplicates(project: Project) -> dict[str, list[str]]:
+    """Wells with a second active reaction of the same target and dye: run -> coords."""
+    found: dict[str, list[str]] = defaultdict(list)
+    for run in project.runs:
+        for well in run.wells.values():
+            pairs = [(r.target, r.fluor) for r in well.reactions if not r.excluded]
+            if len(pairs) != len(set(pairs)):
+                found[run.id].append(well.coord)
+    return found
+
+
+def _without_duplicates(project: Project) -> Project:
+    """A copy where only the first of such reactions takes part; curves are shared, not copied."""
+    copy = clone_project(project)
+    for run in copy.runs:
+        for well in run.wells.values():
+            seen: set[tuple[str, str]] = set()
+            kept = []
+            for r in well.reactions:
+                key = (r.target, r.fluor)
+                if r.excluded or key not in seen:
+                    kept.append(r)
+                    if not r.excluded:
+                        seen.add(key)
+            well.reactions = kept
+    return copy
+
+
 def analyze(project: Project) -> Results:
+    duplicates = _duplicates(project)
+    duplicate_flags = [
+        Flag("warning", "duplicate_reaction", {"count": len(coords)}, run_id, tuple(coords)) for run_id, coords in duplicates.items()
+    ]
+    if duplicates:
+        project = _without_duplicates(project)
     curve_results, flags = analyze_curves(project)
+    flags = duplicate_flags + flags
     calculated = {run.id: run_uses_calculated(run, project.settings) for run in project.runs}
 
     def raw_cq_of(run: Run, well: Well, rxn: Reaction) -> float | None:

@@ -332,6 +332,7 @@ def test_closing_the_window_closes_the_dialog_and_the_timer(demo):
 def test_margins_drop_the_saved_picture(view):  # noqa: F811
     view.canvas.draw()
     assert view._background is not None
+    view.figure.set_size_inches(4.0, 3.0)  # a new size: the saved picture no longer fits
     view._fit_margins()
     assert view._background is None and view._segments_px is None
 

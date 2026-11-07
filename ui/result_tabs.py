@@ -33,6 +33,16 @@ from ui.theme import mpl_style, theme
 _ERROR_KINDS = ("sd", "sem", "ci95")
 
 
+def failure_label(layout) -> QLabel:
+    """The line that says the analysis failed; hidden until it does."""
+    label = QLabel()
+    label.setObjectName("dim")
+    label.setWordWrap(True)
+    label.hide()
+    layout.insertWidget(0, label)
+    return label
+
+
 def _table(widget: QTableWidget, headers: list[str], rows: list[list[object]]) -> None:
     """Fill a compact read-only table."""
     widget.setColumnCount(len(headers))
@@ -83,6 +93,7 @@ class StdCurveTab(QWidget):
         self._combo = QComboBox()
         self._combo.currentIndexChanged.connect(self._on_curve_changed)
         layout.addWidget(self._combo)
+        self.failure = failure_label(layout)
 
         self._canvas = FigureCanvas(tr("ui.no_curves"))
         self._table_widget = QTableWidget()
@@ -98,6 +109,7 @@ class StdCurveTab(QWidget):
 
     def set_results(self, project: Project, results: Results, dark: bool) -> None:
         """Show the standard curves for the current results."""
+        self.failure.hide()
         self._project = project
         self._results = results
         self._dark = dark
@@ -133,6 +145,15 @@ class StdCurveTab(QWidget):
 
         _table(self._table_widget, self._headers, rows)
         self._draw_current()
+
+    def show_failure(self, text: str) -> None:
+        self._curves = []
+        with QSignalBlocker(self._combo):
+            self._combo.clear()
+        _table(self._table_widget, self._headers, [])
+        self._canvas.set_figure(None)
+        self.failure.setText(text)
+        self.failure.show()
 
     def curve_count(self) -> int:
         """Return the number of available standard curves."""
@@ -198,6 +219,7 @@ class ExpressionTab(QWidget):
         self.save_button.setEnabled(False)
         self.save_button.clicked.connect(lambda: self.save_requested.emit(self._target))
         controls.addWidget(self.save_button)
+        self.failure = failure_label(layout)
         layout.addLayout(controls)
 
         self._canvas = FigureCanvas(tr("ui.no_groups"))
@@ -212,6 +234,7 @@ class ExpressionTab(QWidget):
 
     def set_results(self, project: Project, results: Results, dark: bool) -> None:
         """Show relative-expression results."""
+        self.failure.hide()
         self._project = project
         self._results = results
         self._dark = dark
@@ -235,6 +258,18 @@ class ExpressionTab(QWidget):
         self._set_error_combo(self._project_error_bar(project))
         self.save_button.setEnabled(bool(self._target))
         self._redraw()
+
+    def show_failure(self, text: str) -> None:
+        self._results = None
+        self._target = ""
+        with QSignalBlocker(self._target_combo):
+            self._target_combo.clear()
+        self._canvas.set_figure(None)
+        _table(self._groups_table, [], [])
+        _table(self._comparisons_table, [], [])
+        self.save_button.setEnabled(False)
+        self.failure.setText(text)
+        self.failure.show()
 
     @property
     def log2(self) -> bool:
@@ -381,6 +416,7 @@ class QcTab(QWidget):
         self._empty_label.setObjectName("dim")
         self._empty_label.setVisible(False)
         layout.addWidget(self._empty_label)
+        self.failure = failure_label(layout)
 
         self.tree = QTreeWidget(self)
         self.tree.setHeaderLabels(
@@ -393,6 +429,7 @@ class QcTab(QWidget):
 
     def set_results(self, project: Project, results: Results, dark: bool) -> None:
         """Fill the flag tree from the current results."""
+        self.failure.hide()
         self.tree.clear()
         ordered = sorted(
             results.flags,
@@ -422,6 +459,13 @@ class QcTab(QWidget):
             self.tree.addTopLevelItem(item)
 
         self._empty_label.setVisible(not ordered)
+
+    def show_failure(self, text: str) -> None:
+        self.tree.clear()
+        self._flags = []
+        self._empty_label.hide()
+        self.failure.setText(text)
+        self.failure.show()
 
     def item_for_flag(self, code: str) -> QTreeWidgetItem | None:
         """Return the first tree item carrying the given flag code."""
